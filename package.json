@@ -2,7 +2,7 @@
   "name": "as-compatible-copilot",
   "displayName": "AS Compatible Provider for Copilot",
   "description": "Copilot LLM provider backed by Vercel AI SDK.",
-  "version": "1.0.0-beta.1",
+  "version": "1.0.0",
   "publisher": "Q78KG",
   "repository": {
     "type": "git",
@@ -16,9 +16,25 @@
     "chatProvider",
     "languageModelSystem"
   ],
+  "keywords": [
+		"ai",
+		"chat",
+		"copilot",
+		"github-copilot",
+		"language-model",
+		"llm",
+		"openai",
+		"anthropic",
+		"claude",
+		"gemini",
+		"openai-compatible",
+		"openai-responses",
+		"thinking"
+	],
   "categories": [
-    "Other"
-  ],
+		"AI",
+		"Chat"
+	],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -32,7 +48,7 @@
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "ai-sdk",
+        "vendor": "as-compatible-copilot",
         "displayName": "AS Compatible Provider for Copilot"
       }
     ],
