@@ -25,7 +25,8 @@
   "main": "./dist/extension.cjs",
   "type": "commonjs",
   "files": [
-    "dist/extension.cjs"
+    "dist/extension.cjs",
+    "static/assets/configView"
   ],
   "contributes": {
     "languageModelChatProviders": [
@@ -50,10 +51,6 @@
       {
         "command": "asCompatibleCopilot.openConfiguration",
         "title": "AS Compatible Provider for Copilot: Open Configuration"
-      },
-      {
-        "command": "asCompatibleCopilot.generateCommitMessage",
-        "title": "AS Compatible Provider for Copilot: Generate Commit Message"
       }
     ]
   },
