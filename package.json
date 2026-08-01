@@ -26,7 +26,8 @@
   "type": "commonjs",
   "files": [
     "dist/extension.cjs",
-    "static/assets/configView"
+    "static/assets/configView",
+    "LICENSE"
   ],
   "contributes": {
     "languageModelChatProviders": [

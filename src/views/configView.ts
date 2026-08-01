@@ -1,67 +1,111 @@
 import * as vscode from 'vscode';
-import { isReasoningEffort, normalizeSettings, type ModelConfig } from '../core';
+import { isReasoningEffort, normalizeSettings, type ExtensionSettings, type ModelConfig, type ProviderKind } from '../core';
 import { ModelDiscovery, type ProviderProfile } from '../discovery';
 import { ConfigurationStorage } from '../storage';
 
 type Message =
-  | { type: 'refresh' }
+  | { type: 'refresh'; force?: boolean }
   | { type: 'saveSettings'; settings: unknown }
-  | { type: 'saveProfile'; profile: unknown; apiKey?: unknown }
+  | { type: 'saveProfile'; profile: unknown; originalId?: unknown; apiKey?: unknown }
   | { type: 'deleteProfile'; id: unknown }
   | { type: 'saveModel'; model: unknown; originalId?: unknown }
-  | { type: 'deleteModel'; id: unknown };
+  | { type: 'deleteModel'; id: unknown }
+  | { type: 'exportConfig' }
+  | { type: 'importConfig'; config: unknown };
 
-const providers: ProviderProfile['provider'][] = ['anthropic', 'google', 'openai-compatible', 'openai-responses'];
+const providers: ProviderKind[] = ['anthropic', 'google', 'openai-compatible', 'openai-responses'];
 const profileKey = (id: string) => `asCompatibleCopilot.apiKey.profile.${id}`;
+const isRecord = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
+const positive = (value: unknown): number | undefined => typeof value === 'number' && Number.isFinite(value) && value > 0 ? Math.floor(value) : undefined;
 
 function nonce(): string {
   const bytes = new Uint8Array(16);
   crypto.getRandomValues(bytes);
   return [...bytes].map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return !!value && typeof value === 'object' && !Array.isArray(value);
-}
-function message(value: unknown): Message | undefined {
+
+function parseMessage(value: unknown): Message | undefined {
   if (!isRecord(value) || typeof value.type !== 'string') return undefined;
-  if (value.type === 'refresh') return { type: 'refresh' };
-  if (value.type === 'saveSettings') return { type: 'saveSettings', settings: value.settings };
-  if (value.type === 'saveProfile') return { type: 'saveProfile', profile: value.profile, apiKey: value.apiKey };
-  if (value.type === 'deleteProfile') return { type: 'deleteProfile', id: value.id };
-  if (value.type === 'saveModel') return { type: 'saveModel', model: value.model, originalId: value.originalId };
-  if (value.type === 'deleteModel') return { type: 'deleteModel', id: value.id };
-  return undefined;
+  switch (value.type) {
+    case 'refresh': return { type: 'refresh', force: value.force === true };
+    case 'saveSettings': return { type: 'saveSettings', settings: value.settings };
+    case 'saveProfile': return { type: 'saveProfile', profile: value.profile, originalId: value.originalId, apiKey: value.apiKey };
+    case 'deleteProfile': return { type: 'deleteProfile', id: value.id };
+    case 'saveModel': return { type: 'saveModel', model: value.model, originalId: value.originalId };
+    case 'deleteModel': return { type: 'deleteModel', id: value.id };
+    case 'exportConfig': return { type: 'exportConfig' };
+    case 'importConfig': return { type: 'importConfig', config: value.config };
+    default: return undefined;
+  }
+}
+
+function validateSettings(value: unknown): ExtensionSettings {
+  if (!isRecord(value) || !isReasoningEffort(value.reasoningEffort)) throw new Error('Choose a valid reasoning effort.');
+  const settings = normalizeSettings(value);
+  if (!positive(value.contextLength)) throw new Error('Context length must be a positive integer.');
+  return settings;
+}
+
+function validateProfile(value: unknown): ProviderProfile {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim() || !providers.includes(value.provider as ProviderKind)) {
+    throw new Error('Provider ID and provider type are required.');
+  }
+  let baseURL: string | undefined;
+  if (value.baseURL !== undefined && value.baseURL !== '') {
+    if (typeof value.baseURL !== 'string') throw new Error('Base URL must be text.');
+    try {
+      const url = new URL(value.baseURL.trim());
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+      baseURL = url.toString().replace(/\/$/, '');
+    } catch { throw new Error('Base URL must be an http(s) URL.'); }
+  }
+  if (value.provider === 'openai-compatible' && !baseURL) throw new Error('OpenAI-compatible providers require a base URL.');
+  return { id: value.id.trim(), provider: value.provider as ProviderKind, ...(baseURL ? { baseURL } : {}), discover: value.discover !== false };
+}
+
+function validateModel(value: unknown): ModelConfig {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id.trim() || typeof value.model !== 'string' || !value.model.trim() || !providers.includes(value.provider as ProviderKind)) {
+    throw new Error('Model ID, model name, and provider type are required.');
+  }
+  let baseURL: string | undefined;
+  if (value.baseURL !== undefined && value.baseURL !== '') {
+    if (typeof value.baseURL !== 'string') throw new Error('Base URL must be text.');
+    try {
+      const url = new URL(value.baseURL.trim());
+      if (!['http:', 'https:'].includes(url.protocol)) throw new Error();
+      baseURL = url.toString().replace(/\/$/, '');
+    } catch { throw new Error('Base URL must be an http(s) URL.'); }
+  }
+  const model: ModelConfig = {
+    id: value.id.trim(), model: value.model.trim(), provider: value.provider as ProviderKind,
+    ...(typeof value.name === 'string' && value.name.trim() ? { name: value.name.trim() } : {}),
+    ...(baseURL ? { baseURL } : {}),
+    ...(typeof value.profileId === 'string' && value.profileId.trim() ? { profileId: value.profileId.trim() } : {}),
+    ...(positive(value.contextLength) ? { contextLength: positive(value.contextLength) } : {}),
+    ...(positive(value.maxInputTokens) ? { maxInputTokens: positive(value.maxInputTokens) } : {}),
+    ...(positive(value.maxOutputTokens) ? { maxOutputTokens: positive(value.maxOutputTokens) } : {}),
+    ...(typeof value.toolCalling === 'boolean' ? { toolCalling: value.toolCalling } : {}),
+    ...(typeof value.imageInput === 'boolean' ? { imageInput: value.imageInput } : {}),
+    ...(isReasoningEffort(value.reasoningEffort) ? { reasoningEffort: value.reasoningEffort } : {})
+  };
+  return model;
 }
 
 export class ConfigView {
   private static current: ConfigView | undefined;
   private readonly disposables: vscode.Disposable[] = [];
 
-  static open(
-    context: vscode.ExtensionContext,
-    storage: ConfigurationStorage,
-    discovery: ModelDiscovery,
-    loadModels: (force?: boolean) => Promise<ModelConfig[]>,
-    changed: vscode.EventEmitter<void>
-  ): void {
+  static open(context: vscode.ExtensionContext, storage: ConfigurationStorage, discovery: ModelDiscovery, loadModels: (force?: boolean) => Promise<ModelConfig[]>, changed: vscode.EventEmitter<void>): void {
     if (this.current) return this.current.panel.reveal();
     const panel = vscode.window.createWebviewPanel('asCompatibleCopilot.configuration', 'AS Compatible Copilot', vscode.ViewColumn.One, {
-      enableScripts: true,
-      retainContextWhenHidden: true,
+      enableScripts: true, retainContextWhenHidden: true,
       localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'static', 'assets', 'configView')]
     });
     this.current = new ConfigView(panel, context, storage, discovery, loadModels, changed);
   }
 
-  private constructor(
-    private readonly panel: vscode.WebviewPanel,
-    private readonly context: vscode.ExtensionContext,
-    private readonly storage: ConfigurationStorage,
-    private readonly discovery: ModelDiscovery,
-    private readonly loadModels: (force?: boolean) => Promise<ModelConfig[]>,
-    private readonly changed: vscode.EventEmitter<void>
-  ) {
-    this.panel.webview.onDidReceiveMessage((raw) => this.handle(message(raw)), undefined, this.disposables);
+  private constructor(private readonly panel: vscode.WebviewPanel, private readonly context: vscode.ExtensionContext, private readonly storage: ConfigurationStorage, private readonly discovery: ModelDiscovery, private readonly loadModels: (force?: boolean) => Promise<ModelConfig[]>, private readonly changed: vscode.EventEmitter<void>) {
+    this.panel.webview.onDidReceiveMessage((raw) => this.handle(parseMessage(raw)), undefined, this.disposables);
     this.panel.onDidDispose(() => this.dispose(), undefined, this.disposables);
     void this.render();
   }
@@ -72,15 +116,12 @@ export class ConfigView {
     const html = Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.joinPath(root, 'index.html'))).toString('utf8');
     const token = nonce();
     const csp = `default-src 'none'; style-src ${webview.cspSource}; script-src ${webview.cspSource} 'nonce-${token}'`;
-    this.panel.webview.html = html.replaceAll('{{csp}}', csp)
-      .replaceAll('{{css}}', webview.asWebviewUri(vscode.Uri.joinPath(root, 'configView.css')).toString())
-      .replaceAll('{{js}}', webview.asWebviewUri(vscode.Uri.joinPath(root, 'configView.js')).toString())
-      .replaceAll('{{nonce}}', token);
+    this.panel.webview.html = html.replaceAll('{{csp}}', csp).replaceAll('{{css}}', webview.asWebviewUri(vscode.Uri.joinPath(root, 'configView.css')).toString()).replaceAll('{{js}}', webview.asWebviewUri(vscode.Uri.joinPath(root, 'configView.js')).toString()).replaceAll('{{nonce}}', token);
     await this.refresh();
   }
 
-  private async refresh(): Promise<void> {
-    const models = await this.loadModels();
+  private async refresh(force = false): Promise<void> {
+    const models = await this.loadModels(force);
     const keys: Record<string, boolean> = {};
     for (const profile of this.storage.profiles) keys[profile.id] = !!(await this.context.secrets.get(profileKey(profile.id)));
     await this.panel.webview.postMessage({ type: 'state', profiles: this.storage.profiles, models, manualModelIds: this.storage.models.map((model) => model.id), settings: this.storage.settings, keys });
@@ -89,32 +130,71 @@ export class ConfigView {
   private async handle(input: Message | undefined): Promise<void> {
     if (!input) return;
     try {
-      if (input.type === 'refresh') return await this.refresh();
-      if (input.type === 'saveSettings') {
-        if (!isRecord(input.settings) || !isReasoningEffort(input.settings.reasoningEffort)) throw new Error('Invalid settings.');
-        await this.storage.updateSettings(normalizeSettings(input.settings));
-      } else if (input.type === 'saveProfile') {
-        if (!isRecord(input.profile) || typeof input.profile.id !== 'string' || !input.profile.id.trim() || !providers.includes(input.profile.provider as ProviderProfile['provider'])) throw new Error('Invalid provider profile.');
-        const profile = { id: input.profile.id.trim(), provider: input.profile.provider as ProviderProfile['provider'], baseURL: typeof input.profile.baseURL === 'string' && input.profile.baseURL.trim() ? input.profile.baseURL.trim() : undefined, discover: input.profile.discover !== false };
-        const profiles = this.storage.profiles.filter((value) => value.id !== profile.id);
-        await this.storage.updateProfiles([...profiles, profile]);
-        if (typeof input.apiKey === 'string' && input.apiKey.trim()) await this.context.secrets.store(profileKey(profile.id), input.apiKey.trim());
-      } else if (input.type === 'deleteProfile') {
-        if (typeof input.id !== 'string') throw new Error('Invalid profile id.');
-        await this.storage.update(this.storage.profiles.filter((profile) => profile.id !== input.id), this.storage.models.filter((model) => model.profileId !== input.id));
-        await this.context.secrets.delete(profileKey(input.id)); this.discovery.clear(input.id);
-      } else if (input.type === 'saveModel') {
-        if (!isRecord(input.model) || typeof input.model.id !== 'string' || typeof input.model.model !== 'string' || !providers.includes(input.model.provider as ProviderProfile['provider'])) throw new Error('Invalid model.');
-        const sourceModels = await this.loadModels();
-        const originalId = typeof input.originalId === 'string' ? input.originalId : undefined;
-        const existing = [...this.storage.models, ...sourceModels].find((value) => value.id === (originalId ?? (isRecord(input.model) ? input.model.id : undefined)));
-        const model = { ...existing, ...(input.model as object) } as ModelConfig;
-        await this.storage.updateModels([...this.storage.models.filter((value) => value.id !== (existing?.id ?? model.id)), model]);
-      } else if (input.type === 'deleteModel') {
-        if (typeof input.id !== 'string') throw new Error('Invalid model id.');
-        await this.storage.updateModels(this.storage.models.filter((model) => model.id !== input.id));
+      switch (input.type) {
+        case 'refresh': await this.refresh(input.force); break;
+        case 'saveSettings': await this.storage.updateSettings(validateSettings(input.settings)); break;
+        case 'saveProfile': {
+          const profile = validateProfile(input.profile);
+          const originalId = typeof input.originalId === 'string' && input.originalId.trim() ? input.originalId.trim() : profile.id;
+          if (originalId !== profile.id && this.storage.profiles.some((value) => value.id === profile.id)) throw new Error(`Provider ${profile.id} already exists.`);
+          const profiles = this.storage.profiles.filter((value) => value.id !== originalId && value.id !== profile.id);
+          const models = this.storage.models.map((model) => model.profileId === originalId ? { ...model, profileId: profile.id } : model);
+          await this.storage.update([...profiles, profile], models);
+          if (typeof input.apiKey === 'string' && input.apiKey.trim()) await this.context.secrets.store(profileKey(profile.id), input.apiKey.trim());
+          if (originalId !== profile.id) {
+            const oldKey = await this.context.secrets.get(profileKey(originalId));
+            if (oldKey && !(typeof input.apiKey === 'string' && input.apiKey.trim())) await this.context.secrets.store(profileKey(profile.id), oldKey);
+            await this.context.secrets.delete(profileKey(originalId));
+            this.discovery.clear(originalId);
+          }
+          this.discovery.clear(profile.id);
+          break;
+        }
+        case 'deleteProfile': {
+          if (typeof input.id !== 'string' || !input.id.trim()) throw new Error('Invalid provider ID.');
+          const id = input.id.trim();
+          await this.storage.update(this.storage.profiles.filter((profile) => profile.id !== id), this.storage.models.filter((model) => model.profileId !== id));
+          await this.context.secrets.delete(profileKey(id));
+          this.discovery.clear(id);
+          break;
+        }
+        case 'saveModel': {
+          const model = validateModel(input.model);
+          const originalId = typeof input.originalId === 'string' && input.originalId.trim() ? input.originalId.trim() : model.id;
+          const existing = this.storage.models.find((value) => value.id === originalId);
+          if (!existing && originalId === model.id) throw new Error('Discovered-only models cannot be saved as manual models.');
+          if (!existing && originalId !== model.id) throw new Error('Discovered-only models cannot be renamed or saved as manual models.');
+          const merged = validateModel({ ...existing, ...model, ...(existing?.profileId && !model.profileId ? { profileId: existing.profileId } : {}) });
+          if (originalId !== model.id && this.storage.models.some((value) => value.id === model.id)) throw new Error(`Model ${model.id} already exists.`);
+          await this.storage.updateModels([...this.storage.models.filter((value) => value.id !== originalId && value.id !== model.id), merged]);
+          break;
+        }
+        case 'deleteModel': {
+          if (typeof input.id !== 'string' || !this.storage.models.some((model) => model.id === input.id)) throw new Error('Only manually configured models can be deleted.');
+          await this.storage.updateModels(this.storage.models.filter((model) => model.id !== input.id));
+          break;
+        }
+        case 'exportConfig': {
+          const uri = await vscode.window.showSaveDialog({ filters: { JSON: ['json'] }, saveLabel: 'Export configuration' });
+          if (uri) await vscode.workspace.fs.writeFile(uri, Buffer.from(JSON.stringify({ version: 1, profiles: this.storage.profiles, models: this.storage.models, settings: this.storage.settings }, null, 2)));
+          break;
+        }
+        case 'importConfig': {
+          if (!isRecord(input.config) || !Array.isArray(input.config.profiles) || !Array.isArray(input.config.models)) throw new Error('Invalid configuration file.');
+          const profiles = input.config.profiles.map(validateProfile);
+          const models = input.config.models.map(validateModel);
+          const settings = validateSettings(input.config.settings);
+          if ((await vscode.window.showWarningMessage('Replace all provider profiles and manual models?', { modal: true }, 'Replace')) !== 'Replace') return;
+          const importedProfileIds = new Set(profiles.map((profile) => profile.id));
+          for (const profile of this.storage.profiles) {
+            if (!importedProfileIds.has(profile.id)) await this.context.secrets.delete(profileKey(profile.id));
+          }
+          await this.storage.update(profiles, models, settings);
+          break;
+        }
       }
-      this.changed.fire(); await this.refresh();
+      this.changed.fire();
+      await this.refresh();
     } catch (error) {
       await this.panel.webview.postMessage({ type: 'error', error: error instanceof Error ? error.message : String(error) });
     }
