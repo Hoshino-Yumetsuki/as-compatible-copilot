@@ -8,7 +8,7 @@ type Message =
   | { type: 'saveSettings'; settings: unknown }
   | { type: 'saveProfile'; profile: unknown; apiKey?: unknown }
   | { type: 'deleteProfile'; id: unknown }
-  | { type: 'saveModel'; model: unknown }
+  | { type: 'saveModel'; model: unknown; originalId?: unknown }
   | { type: 'deleteModel'; id: unknown };
 
 const providers: ProviderProfile['provider'][] = ['anthropic', 'google', 'openai-compatible', 'openai-responses'];
@@ -28,7 +28,7 @@ function message(value: unknown): Message | undefined {
   if (value.type === 'saveSettings') return { type: 'saveSettings', settings: value.settings };
   if (value.type === 'saveProfile') return { type: 'saveProfile', profile: value.profile, apiKey: value.apiKey };
   if (value.type === 'deleteProfile') return { type: 'deleteProfile', id: value.id };
-  if (value.type === 'saveModel') return { type: 'saveModel', model: value.model };
+  if (value.type === 'saveModel') return { type: 'saveModel', model: value.model, originalId: value.originalId };
   if (value.type === 'deleteModel') return { type: 'deleteModel', id: value.id };
   return undefined;
 }
@@ -83,7 +83,7 @@ export class ConfigView {
     const models = await this.loadModels();
     const keys: Record<string, boolean> = {};
     for (const profile of this.storage.profiles) keys[profile.id] = !!(await this.context.secrets.get(profileKey(profile.id)));
-    await this.panel.webview.postMessage({ type: 'state', profiles: this.storage.profiles, models, settings: this.storage.settings, keys });
+    await this.panel.webview.postMessage({ type: 'state', profiles: this.storage.profiles, models, manualModelIds: this.storage.models.map((model) => model.id), settings: this.storage.settings, keys });
   }
 
   private async handle(input: Message | undefined): Promise<void> {
@@ -105,8 +105,11 @@ export class ConfigView {
         await this.context.secrets.delete(profileKey(input.id)); this.discovery.clear(input.id);
       } else if (input.type === 'saveModel') {
         if (!isRecord(input.model) || typeof input.model.id !== 'string' || typeof input.model.model !== 'string' || !providers.includes(input.model.provider as ProviderProfile['provider'])) throw new Error('Invalid model.');
-        const model = input.model as unknown as ModelConfig;
-        await this.storage.updateModels([...this.storage.models.filter((value) => value.id !== model.id), model]);
+        const sourceModels = await this.loadModels();
+        const originalId = typeof input.originalId === 'string' ? input.originalId : undefined;
+        const existing = [...this.storage.models, ...sourceModels].find((value) => value.id === (originalId ?? (isRecord(input.model) ? input.model.id : undefined)));
+        const model = { ...existing, ...(input.model as object) } as ModelConfig;
+        await this.storage.updateModels([...this.storage.models.filter((value) => value.id !== (existing?.id ?? model.id)), model]);
       } else if (input.type === 'deleteModel') {
         if (typeof input.id !== 'string') throw new Error('Invalid model id.');
         await this.storage.updateModels(this.storage.models.filter((model) => model.id !== input.id));
