@@ -40,9 +40,11 @@
   ],
   "main": "./dist/extension.cjs",
   "type": "commonjs",
+  "icon": "icon.png",
   "files": [
     "dist/extension.cjs",
     "static/assets/configView",
+    "icon.png",
     "LICENSE"
   ],
   "contributes": {
