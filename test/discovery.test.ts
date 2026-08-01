@@ -124,8 +124,8 @@ void test('builds and paginates Anthropic model endpoint and metadata', async ()
 });
 
 void test('manual models win and discovery cache supports expiry force and clear', async () => {
-  const manual = { id: 'local/model-a', provider: 'anthropic' as const, model: 'manual' };
-  const remote = { id: 'local/model-a', provider: 'anthropic' as const, model: 'remote' };
+  const manual = { id: 'anthropic/model-a', provider: 'anthropic' as const, model: 'manual' };
+  const remote = { id: 'anthropic/model-a', provider: 'anthropic' as const, model: 'remote' };
   assert.equal(mergeModels([manual], [remote])[0].model, 'manual');
   let calls = 0;
   let now = 0;

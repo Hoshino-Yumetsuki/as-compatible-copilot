@@ -21,7 +21,7 @@ import { ConfigurationStorage } from './storage';
 import { ConfigView } from './views/configView';
 
 const section = 'asCompatibleCopilot';
-const vendor = 'ai-sdk';
+const vendor = 'as-compatible-copilot';
 const extensionName = 'AS Compatible Provider for Copilot';
 
 function secretName(model: ModelConfig): string {
@@ -143,13 +143,15 @@ function information(
   settings: import('./core').ExtensionSettings
 ): vscode.LanguageModelChatInformation & ModelConfig {
   const configured = effectiveModelConfig(model, settings);
+  const maxOutputTokens = configured.maxOutputTokens ?? 16384;
+  const contextLength = configured.contextLength ?? DEFAULT_CONTEXT_LENGTH;
   return {
     ...configured,
-    name: configured.name ?? configured.model,
+    name: configured.id,
     family: configured.provider,
     version: configured.model,
-    maxInputTokens: configured.contextLength ?? configured.maxInputTokens ?? DEFAULT_CONTEXT_LENGTH,
-    maxOutputTokens: configured.maxOutputTokens ?? 16384,
+    maxInputTokens: Math.max(1, contextLength - maxOutputTokens),
+    maxOutputTokens,
     capabilities: {
       toolCalling: configured.toolCalling ?? true,
       imageInput: configured.imageInput ?? true

@@ -17,24 +17,24 @@
     "languageModelSystem"
   ],
   "keywords": [
-		"ai",
-		"chat",
-		"copilot",
-		"github-copilot",
-		"language-model",
-		"llm",
-		"openai",
-		"anthropic",
-		"claude",
-		"gemini",
-		"openai-compatible",
-		"openai-responses",
-		"thinking"
-	],
+    "ai",
+    "chat",
+    "copilot",
+    "github-copilot",
+    "language-model",
+    "llm",
+    "openai",
+    "anthropic",
+    "claude",
+    "gemini",
+    "openai-compatible",
+    "openai-responses",
+    "thinking"
+  ],
   "categories": [
-		"AI",
-		"Chat"
-	],
+    "AI",
+    "Chat"
+  ],
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -75,9 +75,10 @@
   "scripts": {
     "clean": "rimraf dist",
     "bundle": "rolldown -c rolldown.config.mjs",
+    "build:webview": "vite build",
     "build:vsce": "node --run build && vsce package --no-yarn",
     "bundle:test": "rolldown -c rolldown.test.config.mjs",
-    "build": "node --run clean && node --run bundle",
+    "build": "node --run clean && node --run build:webview && node --run bundle",
     "test": "node --run clean && node --run lint && node --run bundle:test && node --test dist/test/*.test.js",
     "lint": "oxlint",
     "lint-fix": "oxlint --fix && oxfmt"
@@ -88,17 +89,20 @@
     "@ai-sdk/openai": "^4.0.25",
     "@ai-sdk/openai-compatible": "^3.0.18",
     "ai": "^7.0.44",
+    "vue": "^3.5.40",
     "zod": "^4.4.3"
   },
   "devDependencies": {
     "@types/node": "^26.1.2",
     "@types/vscode": "^1.125.0",
+    "@vitejs/plugin-vue": "^6.0.8",
     "@vscode/vsce": "^3.9.2",
     "oxfmt": "^0.61.0",
     "oxlint": "^1.76.0",
     "oxlint-tsgolint": "^7.0.2001",
     "rimraf": "^6.1.3",
     "rolldown": "^1.2.1",
-    "typescript": "^7.0.2"
+    "typescript": "^7.0.2",
+    "vite": "^8.2.0"
   }
 }

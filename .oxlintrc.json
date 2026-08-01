@@ -11,5 +11,5 @@
     "typeAware": true,
     "typeCheck": true
   },
-  "ignorePatterns": ["node_modules", "dist", "coverage"]
+  "ignorePatterns": ["node_modules", "dist", "coverage", "static/assets/configView"]
 }
