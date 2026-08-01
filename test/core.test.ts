@@ -1,6 +1,71 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { estimateTokens, formatUsage, toModelPrompt } from '../src/core.js';
+import {
+  assertModelCapabilities,
+  effectiveModelConfig,
+  estimateTokens,
+  formatUsage,
+  reasoningProviderOptions,
+  toModelPrompt
+} from '../src/core.js';
+
+void test('applies global settings and per-model overrides', () => {
+  const model = effectiveModelConfig(
+    { id: 'm', provider: 'anthropic', model: 'm', toolCalling: true },
+    {
+      reasoningEffort: 'high',
+      contextLength: 256000,
+      modelOverrides: { m: { contextLength: 512000, toolCalling: false } }
+    }
+  );
+  assert.equal(model.contextLength, 512000);
+  assert.equal(model.toolCalling, false);
+  assert.equal(model.reasoningEffort, 'high');
+});
+void test('applies provider options and capability policy', () => {
+  assert.deepEqual(
+    reasoningProviderOptions({
+      id: 'a',
+      provider: 'anthropic',
+      model: 'a',
+      reasoningEffort: 'high'
+    }),
+    { anthropic: { effort: 'high' } }
+  );
+  assert.deepEqual(
+    reasoningProviderOptions({
+      id: 'o',
+      provider: 'openai-responses',
+      model: 'o',
+      reasoningEffort: 'low'
+    }),
+    { openai: { reasoningEffort: 'low' } }
+  );
+  const messages = [{ role: 'user' as const, content: [{ type: 'text' as const, value: 'x' }] }];
+  assert.throws(
+    () =>
+      assertModelCapabilities(
+        { id: 'm', provider: 'anthropic', model: 'm', toolCalling: false },
+        messages,
+        true
+      ),
+    /Tool calling/
+  );
+  assert.throws(
+    () =>
+      assertModelCapabilities(
+        { id: 'm', provider: 'anthropic', model: 'm', imageInput: false },
+        [
+          {
+            role: 'user',
+            content: [{ type: 'data', data: new Uint8Array(1), mimeType: 'image/png' }]
+          }
+        ],
+        false
+      ),
+    /Image input/
+  );
+});
 
 void test('converts text and tool messages while separating instructions', () => {
   const result = toModelPrompt([

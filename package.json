@@ -46,6 +46,14 @@
       {
         "command": "asCompatibleCopilot.refreshModels",
         "title": "AS Compatible Provider for Copilot: Refresh Discovered Models"
+      },
+      {
+        "command": "asCompatibleCopilot.openConfiguration",
+        "title": "AS Compatible Provider for Copilot: Open Configuration"
+      },
+      {
+        "command": "asCompatibleCopilot.generateCommitMessage",
+        "title": "AS Compatible Provider for Copilot: Generate Commit Message"
       }
     ]
   },

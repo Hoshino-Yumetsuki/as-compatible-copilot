@@ -1,13 +1,25 @@
 import type { Memento } from 'vscode';
-import type { ModelConfig } from './core';
+import {
+  DEFAULT_CONTEXT_LENGTH,
+  normalizeSettings,
+  type ExtensionSettings,
+  type ModelConfig
+} from './core';
 import type { ProviderProfile } from './discovery';
 
 const storageKey = 'asCompatibleCopilot.configuration';
 
+export const DEFAULT_SETTINGS: ExtensionSettings = {
+  reasoningEffort: 'medium',
+  contextLength: DEFAULT_CONTEXT_LENGTH,
+  modelOverrides: {}
+};
+
 interface StoredConfiguration {
-  version: 1;
+  version: 2;
   profiles: ProviderProfile[];
   models: ModelConfig[];
+  settings: ExtensionSettings;
 }
 
 export class ConfigurationStorage {
@@ -21,28 +33,42 @@ export class ConfigurationStorage {
     return this.configuration.models;
   }
 
+  get settings(): ExtensionSettings {
+    return this.configuration.settings;
+  }
+
   async updateProfiles(profiles: ProviderProfile[]): Promise<void> {
-    await this.update(profiles, this.models);
+    await this.update(profiles, this.models, this.settings);
   }
 
   async updateModels(models: ModelConfig[]): Promise<void> {
-    await this.update(this.profiles, models);
+    await this.update(this.profiles, models, this.settings);
   }
 
-  async update(profiles: ProviderProfile[], models: ModelConfig[]): Promise<void> {
+  async updateSettings(settings: ExtensionSettings): Promise<void> {
+    await this.update(this.profiles, this.models, settings);
+  }
+
+  async update(
+    profiles: ProviderProfile[],
+    models: ModelConfig[],
+    settings = this.settings
+  ): Promise<void> {
     await this.state.update(storageKey, {
-      version: 1,
+      version: 2,
       profiles,
-      models
+      models,
+      settings
     } satisfies StoredConfiguration);
   }
 
   private get configuration(): StoredConfiguration {
     const stored = this.state.get<Partial<StoredConfiguration>>(storageKey);
     return {
-      version: 1,
+      version: 2,
       profiles: Array.isArray(stored?.profiles) ? stored.profiles : [],
-      models: Array.isArray(stored?.models) ? stored.models : []
+      models: Array.isArray(stored?.models) ? stored.models : [],
+      settings: normalizeSettings(stored?.settings)
     };
   }
 }

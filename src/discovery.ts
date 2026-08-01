@@ -1,4 +1,4 @@
-import type { ModelConfig, ProviderKind } from './core';
+import { DEFAULT_CONTEXT_LENGTH, type ModelConfig, type ProviderKind } from './core';
 
 export interface ProviderProfile {
   id: string;
@@ -12,7 +12,7 @@ export interface DiscoveryResult {
   expiresAt: number;
 }
 
-export const DEFAULT_DISCOVERY_MAX_INPUT = 128000;
+export const DEFAULT_DISCOVERY_MAX_INPUT = DEFAULT_CONTEXT_LENGTH;
 export const DEFAULT_DISCOVERY_MAX_OUTPUT = 16384;
 
 function modelId(value: unknown): string | undefined {

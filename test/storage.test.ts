@@ -20,6 +20,32 @@ void test('stores profiles and models in one versioned global state object', asy
   await storage.updateModels([{ id: 'model', provider: 'anthropic', model: 'claude' }]);
   assert.deepEqual(storage.profiles, [{ id: 'profile', provider: 'anthropic' }]);
   assert.deepEqual(storage.models, [{ id: 'model', provider: 'anthropic', model: 'claude' }]);
+  assert.deepEqual(storage.settings, {
+    reasoningEffort: 'medium',
+    contextLength: 256000,
+    modelOverrides: {}
+  });
+});
+
+void test('normalizes malformed settings and overrides', () => {
+  const storage = new ConfigurationStorage(
+    memento({
+      settings: {
+        reasoningEffort: 'medium',
+        contextLength: 0,
+        modelOverrides: {
+          good: { contextLength: 512, toolCalling: false, imageInput: true, ignored: 'x' },
+          bad: [],
+          empty: { contextLength: -1 }
+        }
+      }
+    })
+  );
+  assert.deepEqual(storage.settings, {
+    reasoningEffort: 'medium',
+    contextLength: 256000,
+    modelOverrides: { good: { contextLength: 512, toolCalling: false, imageInput: true } }
+  });
 });
 
 void test('defaults malformed stored arrays to empty arrays', () => {

@@ -35,7 +35,7 @@ void test('discovers OpenAI-compatible models with bearer authentication', async
   });
   assert.equal(models.length, 1);
   assert.equal(models[0].id, 'local/model-a');
-  assert.equal(models[0].maxInputTokens, 128000);
+  assert.equal(models[0].maxInputTokens, 256000);
 });
 
 void test('discovers paginated Gemini models and normalizes names', async () => {

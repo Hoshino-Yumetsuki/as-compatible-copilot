@@ -1,16 +1,21 @@
+import { randomBytes } from 'node:crypto';
 import { createAnthropic } from '@ai-sdk/anthropic';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
-import { jsonSchema, streamText, tool, type LanguageModel } from 'ai';
+import { generateText, jsonSchema, streamText, tool, type LanguageModel } from 'ai';
 import * as vscode from 'vscode';
 import {
+  effectiveModelConfig,
   estimateTokens,
   formatUsage,
+  reasoningProviderOptions,
+  assertModelCapabilities,
   toModelPrompt,
   type InputMessage,
   type InputPart,
-  type ModelConfig
+  type ModelConfig,
+  DEFAULT_CONTEXT_LENGTH
 } from './core';
 import { mergeModels, ModelDiscovery, type ProviderProfile } from './discovery';
 import { ConfigurationStorage } from './storage';
@@ -33,6 +38,125 @@ const providerLabels: Record<ProviderProfile['provider'], string> = {
   'openai-compatible': 'OpenAI-compatible Chat Completions',
   'openai-responses': 'OpenAI Responses'
 };
+
+function panelHtml(
+  webview: vscode.Webview,
+  settings: import('./core').ExtensionSettings,
+  models: ModelConfig[]
+): string {
+  const nonce = randomBytes(16).toString('base64');
+  const escape = (value: string) =>
+    value.replace(
+      /[&<>"']/g,
+      (character) =>
+        ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[character]!
+    );
+  const modelRows = models
+    .map((model) => {
+      const override = settings.modelOverrides[model.id] ?? {};
+      return `<fieldset><legend>${escape(model.name ?? model.id)}</legend><small>${escape(model.id)}</small><label>Context <input data-id="${escape(model.id)}" data-field="contextLength" type="number" value="${override.contextLength ?? ''}" placeholder="${settings.contextLength}"></label><label>Tools <select data-id="${escape(model.id)}" data-field="toolCalling"><option value="inherit" ${override.toolCalling === undefined ? 'selected' : ''}>Inherit</option><option value="true" ${override.toolCalling === true ? 'selected' : ''}>On</option><option value="false" ${override.toolCalling === false ? 'selected' : ''}>Off</option></select></label><label>Images <select data-id="${escape(model.id)}" data-field="imageInput"><option value="inherit" ${override.imageInput === undefined ? 'selected' : ''}>Inherit</option><option value="true" ${override.imageInput === true ? 'selected' : ''}>On</option><option value="false" ${override.imageInput === false ? 'selected' : ''}>Off</option></select></label><button type="button" data-reset="${escape(model.id)}">Reset</button></fieldset>`;
+    })
+    .join('');
+  const csp = `default-src 'none'; style-src ${webview.cspSource}; script-src 'nonce-${nonce}';`;
+  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${csp}"><style>body{font-family:var(--vscode-font-family);color:var(--vscode-foreground);padding:1rem}label{display:block;margin:.5rem 0}fieldset{margin:1rem 0}input{max-width:12rem}</style></head><body><h2>AS Compatible Copilot</h2><label>Reasoning effort <select id="reasoning">${['low', 'medium', 'high', 'xhigh', 'max'].map((value) => `<option ${value === settings.reasoningEffort ? 'selected' : ''}>${value}</option>`).join('')}</select></label><label>Context length <input id="context" type="number" value="${settings.contextLength}"></label><h3>Models</h3>${modelRows || '<p>No configured models.</p>'}<button id="save">Save</button><script nonce="${nonce}">const vscode=acquireVsCodeApi();const collect=()=>{const modelOverrides={};document.querySelectorAll('[data-id]').forEach((element)=>{const id=element.dataset.id;const field=element.dataset.field;const value=element.value;if(!modelOverrides[id])modelOverrides[id]={};if(field==='contextLength'&&value)modelOverrides[id][field]=Number(value);if(field!=='contextLength'&&value!=='inherit')modelOverrides[id][field]=value==='true';});return modelOverrides;};document.querySelectorAll('[data-reset]').forEach((button)=>button.onclick=()=>{document.querySelectorAll('[data-id="'+button.dataset.reset+'"]').forEach((element)=>element.value=element.dataset.field==='contextLength'?'':'inherit');});document.getElementById('save').onclick=()=>vscode.postMessage({type:'save',reasoningEffort:document.getElementById('reasoning').value,contextLength:Number(document.getElementById('context').value),modelOverrides:collect()});</script></body></html>`;
+}
+
+async function openConfiguration(
+  context: vscode.ExtensionContext,
+  storage: ConfigurationStorage,
+  modelsChanged: vscode.EventEmitter<void>,
+  models: ModelConfig[]
+): Promise<void> {
+  const panel = vscode.window.createWebviewPanel(
+    'asCompatibleCopilot.configuration',
+    'AS Compatible Copilot',
+    vscode.ViewColumn.One,
+    { enableScripts: true }
+  );
+  panel.webview.html = panelHtml(panel.webview, storage.settings, models);
+  panel.webview.onDidReceiveMessage(
+    async (message: {
+      type?: string;
+      reasoningEffort?: string;
+      contextLength?: number;
+      modelOverrides?: unknown;
+    }) => {
+      if (message.type !== 'save') return;
+      const settings = {
+        reasoningEffort: message.reasoningEffort,
+        contextLength: message.contextLength,
+        modelOverrides: message.modelOverrides
+      };
+      await storage.updateSettings(settings as import('./core').ExtensionSettings);
+      modelsChanged.fire();
+      void vscode.window.showInformationMessage('Configuration saved.');
+    },
+    undefined,
+    context.subscriptions
+  );
+}
+
+async function generateCommitMessage(
+  context: vscode.ExtensionContext,
+  storage: ConfigurationStorage,
+  loadModels: () => Promise<ModelConfig[]>
+): Promise<void> {
+  const workspace = vscode.workspace.workspaceFolders?.[0];
+  if (!workspace) {
+    void vscode.window.showErrorMessage('Open a workspace before generating a commit message.');
+    return;
+  }
+  const diff = await new Promise<string>((resolve, reject) => {
+    const child = require('node:child_process').spawn('git', ['diff', '--cached'], {
+      cwd: workspace.uri.fsPath
+    });
+    let output = '';
+    let error = '';
+    child.stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    child.stderr.on('data', (chunk: Buffer) => {
+      error += chunk.toString();
+    });
+    child.on('error', reject);
+    child.on('close', (code: number) =>
+      code === 0 ? resolve(output) : reject(new Error(error || `git diff failed (${code})`))
+    );
+  });
+  if (!diff.trim()) {
+    void vscode.window.showInformationMessage('No staged changes found.');
+    return;
+  }
+  const models = await loadModels();
+  if (!models.length) {
+    void vscode.window.showErrorMessage('Configure a provider model first.');
+    return;
+  }
+  const selected =
+    models.length === 1
+      ? models[0]
+      : await vscode.window
+          .showQuickPick(
+            models.map((model) => ({ label: model.name ?? model.id, model })),
+            { placeHolder: 'Select a model for the commit message' }
+          )
+          .then((value) => value?.model);
+  if (!selected) return;
+  const configured = effectiveModelConfig(selected, storage.settings);
+  const result = await generateText({
+    model: await languageModel(configured, context.secrets),
+    system:
+      'Write one concise conventional commit message for the staged diff. Return only the message subject.',
+    prompt: diff,
+    maxOutputTokens: 100,
+    providerOptions: reasoningProviderOptions(configured) as never
+  });
+  const document = await vscode.workspace.openTextDocument({
+    content: result.text.trim(),
+    language: 'git-commit'
+  });
+  await vscode.window.showTextDocument(document);
+}
 
 async function createProfile(storage: ConfigurationStorage): Promise<ProviderProfile | undefined> {
   const provider = await vscode.window.showQuickPick(
@@ -132,17 +256,21 @@ function asInputMessage(message: vscode.LanguageModelChatRequestMessage): InputM
   };
 }
 
-function information(model: ModelConfig): vscode.LanguageModelChatInformation & ModelConfig {
+function information(
+  model: ModelConfig,
+  settings: import('./core').ExtensionSettings
+): vscode.LanguageModelChatInformation & ModelConfig {
+  const configured = effectiveModelConfig(model, settings);
   return {
-    ...model,
-    name: model.name ?? model.model,
-    family: model.provider,
-    version: model.model,
-    maxInputTokens: model.maxInputTokens ?? 128000,
-    maxOutputTokens: model.maxOutputTokens ?? 16384,
+    ...configured,
+    name: configured.name ?? configured.model,
+    family: configured.provider,
+    version: configured.model,
+    maxInputTokens: configured.contextLength ?? configured.maxInputTokens ?? DEFAULT_CONTEXT_LENGTH,
+    maxOutputTokens: configured.maxOutputTokens ?? 16384,
     capabilities: {
-      toolCalling: model.toolCalling ?? true,
-      imageInput: model.imageInput ?? true
+      toolCalling: configured.toolCalling ?? true,
+      imageInput: configured.imageInput ?? true
     }
   };
 }
@@ -269,6 +397,12 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     })
   );
   context.subscriptions.push(
+    vscode.commands.registerCommand(`${section}.openConfiguration`, async () =>
+      openConfiguration(context, storage, modelsChanged, await loadModels())
+    ),
+    vscode.commands.registerCommand(`${section}.generateCommitMessage`, () =>
+      generateCommitMessage(context, storage, loadModels)
+    ),
     vscode.commands.registerCommand(`${section}.deleteConfigured`, async () => {
       const profiles = storage.profiles;
       const models = storage.models;
@@ -329,28 +463,42 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.lm.registerLanguageModelChatProvider(vendor, {
       onDidChangeLanguageModelChatInformation: modelsChanged.event,
       provideLanguageModelChatInformation: () =>
-        loadModels().then((models) => models.map(information)),
+        loadModels().then((models) => models.map((model) => information(model, storage.settings))),
       async provideLanguageModelChatResponse(model, messages, options, progress, token) {
-        const configured = model as vscode.LanguageModelChatInformation & ModelConfig;
-        const tools = Object.fromEntries(
-          (options.tools ?? []).map((value) => [
-            value.name,
-            tool({
-              description: value.description,
-              inputSchema: jsonSchema(value.inputSchema ?? { type: 'object', properties: {} })
-            })
-          ])
+        const configured = effectiveModelConfig(
+          model as vscode.LanguageModelChatInformation & ModelConfig,
+          storage.settings
         );
+        const inputMessages = messages.map(asInputMessage);
+        assertModelCapabilities(
+          configured,
+          inputMessages,
+          options.toolMode === vscode.LanguageModelChatToolMode.Required
+        );
+        const tools =
+          configured.toolCalling === false
+            ? undefined
+            : Object.fromEntries(
+                (options.tools ?? []).map((value) => [
+                  value.name,
+                  tool({
+                    description: value.description,
+                    inputSchema: jsonSchema(value.inputSchema ?? { type: 'object', properties: {} })
+                  })
+                ])
+              );
         const controller = new AbortController();
         const cancellation = token.onCancellationRequested(() => controller.abort());
         try {
           const result = streamText({
             model: await languageModel(configured, context.secrets),
-            ...toModelPrompt(messages.map(asInputMessage)),
+            ...toModelPrompt(inputMessages),
             maxOutputTokens: configured.maxOutputTokens,
-            tools,
-            toolChoice:
-              options.toolMode === vscode.LanguageModelChatToolMode.Required ? 'required' : 'auto',
+            providerOptions: reasoningProviderOptions(configured) as never,
+            ...(tools ? { tools } : {}),
+            ...(tools && options.toolMode === vscode.LanguageModelChatToolMode.Required
+              ? { toolChoice: 'required' as const }
+              : {}),
             abortSignal: controller.signal
           });
           for await (const part of result.fullStream) {
