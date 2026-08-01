@@ -4,149 +4,151 @@
 
 # AS Provider for Copilot
 
-**在 VS Code 的 GitHub Copilot Chat 中使用 Anthropic、Google Gemini、OpenAI 及任意兼容接口**
+**Use Anthropic, Google Gemini, OpenAI, and any compatible API in VS Code's GitHub Copilot Chat**
 
 </div>
 
 [![License](https://img.shields.io/github/license/Hoshino-Yumetsuki/as-compatible-copilot?color=orange&label=License)](https://github.com/Hoshino-Yumetsuki/as-compatible-copilot/blob/main/LICENSE)
 
-## 特性
+English | [简体中文](README.zh-CN.md)
 
-- **多 Provider 支持**：Anthropic Messages、Google Gemini、OpenAI Responses、OpenAI-compatible Chat Completions（兼容 DeepSeek、SiliconFlow 等）
-- **模型自动发现**：通过 Provider 的模型列表接口自动列举可用模型，无需手动填写每个模型 ID
-- **推理强度控制**：支持 `low / medium / high / xhigh / max` 五档 Reasoning Effort，适配 Anthropic 和 OpenAI 推理模型
-- **图片输入**：对支持视觉能力的模型启用图片上下文
-- **工具调用**：对支持 Tool Calling 的模型启用 Agent 工具调用能力
-- **可视化配置界面**：通过内置界面或指令管理 Provider Profile、模型和全局设置，无需手动编辑任何文件
+## Features
 
-## 环境要求
+- **Multi-Provider Support**: Anthropic Messages, Google Gemini, OpenAI Responses, and OpenAI-compatible Chat Completions (compatible with DeepSeek, SiliconFlow, etc.)
+- **Automatic Model Discovery**: Automatically enumerates available models via the provider's model list API — no need to manually enter every model ID
+- **Reasoning Effort Control**: Supports five levels — `low / medium / high / xhigh / max` — for Anthropic and OpenAI reasoning models
+- **Image Input**: Enables image context for models with vision capabilities
+- **Tool Calling**: Enables agent tool-calling for models that support it
+- **Visual Configuration UI**: Manage Provider Profiles, models, and global settings through a built-in interface or commands — no manual file editing required
+
+## Requirements
 
 - VS Code `>= 1.126.0`
-- GitHub Copilot 扩展（需启用 `chatProvider` 和 `languageModelSystem` 提案 API）
+- GitHub Copilot extension (with `chatProvider` and `languageModelSystem` proposed APIs enabled)
 
-## 快速开始
+## Quick Start
 
-1. 在 [VS Code 扩展市场](https://marketplace.visualstudio.com/items?itemName=Q78KG.as-compatible-copilot) 安装 **AS Provider for Copilot**。
-2. 按 `Ctrl+Shift+P`，执行 **AS Provider for Copilot: Open Configuration**。
-3. 在配置界面添加一个 Provider Profile，选择 Provider 类型并填写 Base URL。
-4. 为该 Profile 填写 API Key。
-5. 完成后，模型将自动出现在 Copilot 的模型选择器中。
+1. Install **AS Provider for Copilot** from the [VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=Q78KG.as-compatible-copilot).
+2. Press `Ctrl+Shift+P` and run **AS Provider for Copilot: Open Configuration**.
+3. Add a Provider Profile, select the provider type, and enter the Base URL.
+4. Enter the API Key for that profile.
+5. Models will automatically appear in Copilot's model picker.
 
-## 可视化配置界面
+## Visual Configuration UI
 
-本扩展提供可视化配置界面，方便管理 Provider Profile、模型和全局设置，无需手动编辑任何文件。
+The extension provides a visual configuration interface to manage Provider Profiles, models, and global settings without editing any files manually.
 
-### 打开配置界面
+### Open the Configuration UI
 
-按 `Ctrl+Shift+P`，搜索并执行 **AS Provider for Copilot: Open Configuration**。
+Press `Ctrl+Shift+P`, search for and run **AS Provider for Copilot: Open Configuration**.
 
 <details>
-<summary>点击展开：工作流示例</summary>
+<summary>Click to expand: Workflow example</summary>
 
-1. **添加 Provider Profile**
-   - 在配置页面点击添加 Profile
-   - 选择 Provider 类型（如 `openai-compatible`）
-   - 填写 Base URL（如 `https://api.deepseek.com/v1`）
-   - 填写 API Key
-   - 保存后扩展将自动发现该 Provider 下的所有模型
+1. **Add a Provider Profile**
+   - Click "Add Profile" on the configuration page
+   - Select the provider type (e.g. `openai-compatible`)
+   - Enter the Base URL (e.g. `https://api.deepseek.com/v1`)
+   - Enter the API Key
+   - After saving, the extension will automatically discover all models for that provider
 
-2. **手动添加模型**
-   - 若 Provider 不支持模型列表接口，可手动添加模型配置
-   - 填写模型 ID、关联 Profile，并按需配置上下文长度、工具调用、图片输入等能力
+2. **Add a Model Manually**
+   - If the provider doesn't support a model list API, you can add model configurations manually
+   - Enter the model ID, associate it with a profile, and configure context length, tool calling, image input, etc. as needed
 
-3. **在 Copilot 中使用**
-   - 打开 GitHub Copilot Chat（`Ctrl+Shift+I`）
-   - 点击模型选择器，选择 "Manage Models..."
-   - 选择 **AS Provider for Copilot** 供应商
-   - 选择已发现或手动配置的模型，开始对话
+3. **Use in Copilot**
+   - Open GitHub Copilot Chat (`Ctrl+Shift+I`)
+   - Click the model picker and select "Manage Models..."
+   - Choose the **AS Provider for Copilot** vendor
+   - Select a discovered or manually configured model and start chatting
 
 </details>
 
-## 多 Provider 管理
+## Multi-Provider Management
 
-每个 Provider Profile 对应一个独立的上游 API 服务，可同时配置多个 Profile 并为每个 Profile 单独管理 API Key。
+Each Provider Profile corresponds to a separate upstream API service. You can configure multiple profiles simultaneously and manage API Keys independently for each.
 
-| Provider 类型 | 默认 Base URL | 说明 |
+| Provider Type | Default Base URL | Description |
 |---|---|---|
-| `anthropic` | `https://api.anthropic.com` | Anthropic Claude 系列 |
-| `google` | `https://generativelanguage.googleapis.com` | Google Gemini 系列 |
+| `anthropic` | `https://api.anthropic.com` | Anthropic Claude series |
+| `google` | `https://generativelanguage.googleapis.com` | Google Gemini series |
 | `openai-responses` | `https://api.openai.com/v1` | OpenAI Responses API |
-| `openai-compatible` | 用户自定义 | 任意 OpenAI 兼容接口 |
+| `openai-compatible` | User-defined | Any OpenAI-compatible endpoint |
 
-## 推理强度控制
+## Reasoning Effort Control
 
-对于支持推理功能的模型（如 Claude、GPT 等），可在全局设置中配置推理强度，也可通过模型覆盖（Model Overrides）为特定模型单独设置：
+For models that support reasoning (e.g. Claude, GPT), you can configure the reasoning effort level globally or override it per model using Model Overrides:
 
-| 档位 | 说明 |
+| Level | Description |
 |---|---|
-| `low` | 最低推理消耗，速度最快 |
-| `medium` | 均衡（默认） |
-| `high` | 较高推理深度 |
-| `xhigh` | 深度推理 |
-| `max` | 最大推理消耗 |
+| `low` | Minimum reasoning, fastest |
+| `medium` | Balanced (default) |
+| `high` | Higher reasoning depth |
+| `xhigh` | Deep reasoning |
+| `max` | Maximum reasoning effort |
 
-此外，还可通过模型覆盖为特定模型单独覆盖 `contextLength`、`toolCalling`、`imageInput` 参数，而不影响全局设置。
+You can also use Model Overrides to set `contextLength`, `toolCalling`, and `imageInput` per model without affecting global settings.
 
-## 命令
+## Commands
 
-| 命令 | 说明 |
+| Command | Description |
 |---|---|
-| `AS Provider for Copilot: Open Configuration` | 打开图形化配置页面 |
-| `AS Provider for Copilot: Set API Key` | 为模型或 Profile 设置 API Key |
-| `AS Provider for Copilot: Delete Configured Entry` | 删除已配置的模型或 Profile |
-| `AS Provider for Copilot: Refresh Discovered Models` | 强制刷新自动发现的模型列表 |
+| `AS Provider for Copilot: Open Configuration` | Open the graphical configuration page |
+| `AS Provider for Copilot: Set API Key` | Set an API Key for a model or profile |
+| `AS Provider for Copilot: Delete Configured Entry` | Delete a configured model or profile |
+| `AS Provider for Copilot: Refresh Discovered Models` | Force-refresh the auto-discovered model list |
 
-## 开发
+## Development
 
 <details>
-<summary>点击展开</summary>
+<summary>Click to expand</summary>
 
-### 环境要求
+### Requirements
 
-- Node.js 最新 LTS
+- Node.js latest LTS
 - Yarn 4.x
 
-### 常用脚本
+### Common Scripts
 
 ```bash
-# 安装依赖
+# Install dependencies
 yarn install
 
-# 完整构建（清理 + WebView + 扩展主体）
+# Full build (clean + WebView + extension)
 yarn build
 
-# 运行测试
+# Run tests
 yarn test
 
-# 代码检查
+# Lint
 yarn lint
 
-# 打包 .vsix
+# Package .vsix
 yarn build:vsce
 ```
 
-### 项目结构
+### Project Structure
 
 ```
 src/
-  core.ts          # 类型定义、Provider 选项、消息转换
-  discovery.ts     # 模型自动发现
-  extension.ts     # VS Code 扩展入口
-  storage.ts       # 配置持久化
+  core.ts          # Type definitions, provider options, message conversion
+  discovery.ts     # Automatic model discovery
+  extension.ts     # VS Code extension entry point
+  storage.ts       # Configuration persistence
   views/
-    configView.ts  # WebView 控制器
-webview/           # 配置界面前端（Vue 3）
-static/            # 构建后的 WebView 静态资源
+    configView.ts  # WebView controller
+webview/           # Configuration UI frontend (Vue 3)
+static/            # Built WebView static assets
 ```
 
 </details>
 
-## 致谢
+## Acknowledgements
 
-- [Vercel AI SDK](https://sdk.vercel.ai/) — 底层多 Provider 推理驱动
+- [Vercel AI SDK](https://sdk.vercel.ai/) — Underlying multi-provider inference driver
 - [VS Code Language Model Chat Provider API](https://code.visualstudio.com/api/extension-guides/ai/language-model-chat-provider)
 
-## 支持 & 许可证
+## Support & License
 
-- 提交 Issue：https://github.com/Hoshino-Yumetsuki/as-compatible-copilot/issues
-- 许可证：[MIT](LICENSE)
+- Submit an Issue: https://github.com/Hoshino-Yumetsuki/as-compatible-copilot/issues
+- License: [MIT](LICENSE)
