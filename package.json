@@ -2,11 +2,15 @@
   "name": "as-compatible-copilot",
   "displayName": "AS Compatible Provider for Copilot",
   "description": "Copilot LLM provider backed by Vercel AI SDK.",
-  "version": "0.0.1",
-  "publisher": "local",
+  "version": "1.0.0-beta.1",
+  "publisher": "Q78KG",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Hoshino-Yumetsuki/as-compatible-copilot.git"
+  },
   "license": "MIT",
   "engines": {
-    "vscode": "^1.130.0"
+    "vscode": "^1.126.0"
   },
   "enabledApiProposals": [
     "chatProvider",
@@ -173,10 +177,10 @@
   "scripts": {
     "clean": "rimraf dist",
     "bundle": "rolldown -c rolldown.config.mjs",
-    "pack": "vsce package --no-yarn",
+    "build:vsce": "node --run build && vsce package --no-yarn",
     "bundle:test": "rolldown -c rolldown.test.config.mjs",
-    "build": "yarn clean && yarn bundle",
-    "test": "yarn clean && yarn typecheck && yarn bundle:test && node --test dist/test/*.test.js",
+    "build": "node --run clean && node --run bundle",
+    "test": "node --run clean && node --run typecheck && node --run bundle:test && node --test dist/test/*.test.js",
     "lint": "oxlint",
     "lint-fix": "oxlint --fix && oxfmt"
   },
