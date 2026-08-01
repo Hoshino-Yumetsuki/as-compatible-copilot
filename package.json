@@ -1,7 +1,7 @@
 {
   "name": "as-compatible-copilot",
-  "displayName": "AS Compatible Provider for Copilot",
-  "description": "Copilot LLM provider backed by Vercel AI SDK.",
+  "displayName": "AS Provider for Copilot",
+  "description": "BYOK Copilot LLM provider backed by Vercel AI SDK.",
   "version": "1.0.0",
   "publisher": "Q78KG",
   "repository": {
@@ -51,25 +51,25 @@
     "languageModelChatProviders": [
       {
         "vendor": "as-compatible-copilot",
-        "displayName": "AS Compatible Provider for Copilot"
+        "displayName": "AS Provider for Copilot"
       }
     ],
     "commands": [
       {
         "command": "asCompatibleCopilot.setApiKey",
-        "title": "AS Compatible Provider for Copilot: Set API Key"
+        "title": "AS Provider for Copilot: Set API Key"
       },
       {
         "command": "asCompatibleCopilot.deleteConfigured",
-        "title": "AS Compatible Provider for Copilot: Delete Configured Entry"
+        "title": "AS Provider for Copilot: Delete Configured Entry"
       },
       {
         "command": "asCompatibleCopilot.refreshModels",
-        "title": "AS Compatible Provider for Copilot: Refresh Discovered Models"
+        "title": "AS Provider for Copilot: Refresh Discovered Models"
       },
       {
         "command": "asCompatibleCopilot.openConfiguration",
-        "title": "AS Compatible Provider for Copilot: Open Configuration"
+        "title": "AS Provider for Copilot: Open Configuration"
       }
     ]
   },

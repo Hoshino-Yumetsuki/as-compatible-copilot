@@ -22,7 +22,7 @@ import { ConfigView } from './views/configView';
 
 const section = 'asCompatibleCopilot';
 const vendor = 'as-compatible-copilot';
-const extensionName = 'AS Compatible Provider for Copilot';
+const extensionName = 'AS Provider for Copilot';
 
 function secretName(model: ModelConfig): string {
   return model.profileId ? profileSecretName(model.profileId) : `${section}.apiKey.${model.id}`;
@@ -166,7 +166,7 @@ async function languageModel(
   const apiKey = await secrets.get(secretName(model));
   if (!apiKey) {
     throw new Error(
-      `No API key for ${model.id}. Run "AS Compatible Provider for Copilot: Set API Key".`
+      `No API key for ${model.id}. Run "AS Provider for Copilot: Set API Key".`
     );
   }
   switch (model.provider) {
