@@ -6,6 +6,7 @@ export default defineConfig({
   output: {
     file: 'dist/extension.cjs',
     format: 'cjs',
-    codeSplitting: false
+    codeSplitting: false,
+    minify: true
   }
 });
