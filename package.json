@@ -1,5 +1,5 @@
 {
-  "name": "as-compatible-provider",
+  "name": "as-compatible-copilot",
   "displayName": "AS Compatible Provider for Copilot",
   "description": "Copilot LLM provider backed by Vercel AI SDK.",
   "version": "0.0.1",

@@ -1372,9 +1372,9 @@ __metadata:
   languageName: node
   linkType: hard
 
-"as-compatible-provider@workspace:.":
+"as-compatible-copilot@workspace:.":
   version: 0.0.0-use.local
-  resolution: "as-compatible-provider@workspace:."
+  resolution: "as-compatible-copilot@workspace:."
   dependencies:
     "@ai-sdk/anthropic": "npm:^4.0.25"
     "@ai-sdk/google": "npm:^4.0.29"
