@@ -1,10 +1,11 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { estimateTokens, formatUsage, toModelMessages } from '../src/core.js';
+import { estimateTokens, formatUsage, toModelPrompt } from '../src/core.js';
 
-test('converts text and tool messages without adding instructions', () => {
-  const result = toModelMessages([
-    { role: 'system', content: [{ type: 'text', value: 'copilot instructions' }] },
+void test('converts text and tool messages while separating instructions', () => {
+  const result = toModelPrompt([
+    { role: 'system', content: [{ type: 'text', value: 'first instruction' }] },
+    { role: 'system', content: [{ type: 'text', value: 'second instruction' }] },
     { role: 'user', content: [{ type: 'text', value: 'hello' }] },
     {
       role: 'assistant',
@@ -18,23 +19,35 @@ test('converts text and tool messages without adding instructions', () => {
       content: [{ type: 'tool-result', callId: 'c1', content: [{ type: 'text', value: 'done' }] }]
     }
   ]);
-  assert.deepEqual(result[0], { role: 'system', content: 'copilot instructions' });
-  assert.deepEqual(result[1], { role: 'user', content: [{ type: 'text', text: 'hello' }] });
-  assert.deepEqual(result[2], {
+  assert.deepEqual(result.instructions, [
+    { role: 'system', content: 'first instruction' },
+    { role: 'system', content: 'second instruction' }
+  ]);
+  assert.deepEqual(result.messages[0], {
+    role: 'user',
+    content: [{ type: 'text', text: 'hello' }]
+  });
+  assert.deepEqual(result.messages[1], {
     role: 'assistant',
     content: [
       { type: 'text', text: 'hi' },
       { type: 'tool-call', toolCallId: 'c1', toolName: 'lookup', input: { q: 'x' } }
     ]
   });
-  assert.equal(result[3].role, 'tool');
-  if (result[3].role !== 'tool' || result[3].content[0].type !== 'tool-result') {
+  assert.equal(result.messages[2].role, 'tool');
+  if (result.messages[2].role !== 'tool' || result.messages[2].content[0].type !== 'tool-result') {
     assert.fail('expected tool result');
   }
-  assert.equal(result[3].content[0].toolName, 'lookup');
+  assert.equal(result.messages[2].content[0].toolName, 'lookup');
 });
 
-test('estimates tokens and formats safe usage diagnostics', () => {
+void test('omits instructions when there are no system messages', () => {
+  const result = toModelPrompt([{ role: 'user', content: [{ type: 'text', value: 'hello' }] }]);
+  assert.equal(result.instructions, undefined);
+  assert.equal(result.messages.length, 1);
+});
+
+void test('estimates tokens and formats safe usage diagnostics', () => {
   assert.equal(estimateTokens('abcd'), 1);
   assert.equal(estimateTokens('abcde'), 2);
   assert.equal(

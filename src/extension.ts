@@ -7,14 +7,15 @@ import * as vscode from 'vscode';
 import {
   estimateTokens,
   formatUsage,
-  toModelMessages,
+  toModelPrompt,
   type InputMessage,
   type InputPart,
   type ModelConfig
 } from './core';
 import { mergeModels, ModelDiscovery, type ProviderProfile } from './discovery';
+import { ConfigurationStorage } from './storage';
 
-const section = 'oaiCompatibleAiSdk';
+const section = 'asCompatibleCopilot';
 const vendor = 'ai-sdk';
 const extensionName = 'AS Compatible Provider for Copilot';
 
@@ -26,14 +27,6 @@ function profileSecretName(profileId: string): string {
   return `${section}.apiKey.profile.${profileId}`;
 }
 
-function configuredModels(): ModelConfig[] {
-  return vscode.workspace.getConfiguration(section).get<ModelConfig[]>('models', []);
-}
-
-function configuredProfiles(): ProviderProfile[] {
-  return vscode.workspace.getConfiguration(section).get<ProviderProfile[]>('profiles', []);
-}
-
 const providerLabels: Record<ProviderProfile['provider'], string> = {
   anthropic: 'Anthropic Messages',
   google: 'Google Gemini',
@@ -41,7 +34,7 @@ const providerLabels: Record<ProviderProfile['provider'], string> = {
   'openai-responses': 'OpenAI Responses'
 };
 
-async function createProfile(): Promise<ProviderProfile | undefined> {
+async function createProfile(storage: ConfigurationStorage): Promise<ProviderProfile | undefined> {
   const provider = await vscode.window.showQuickPick(
     (Object.keys(providerLabels) as ProviderProfile['provider'][]).map((value) => ({
       label: providerLabels[value],
@@ -61,7 +54,7 @@ async function createProfile(): Promise<ProviderProfile | undefined> {
   if (!id) {
     return undefined;
   }
-  if (configuredProfiles().some((profile) => profile.id === id.trim())) {
+  if (storage.profiles.some((profile) => profile.id === id.trim())) {
     vscode.window.showErrorMessage(`A provider profile named "${id.trim()}" already exists.`);
     return undefined;
   }
@@ -181,15 +174,16 @@ async function languageModel(
   }
 }
 
-export function activate(context: vscode.ExtensionContext): void {
+export async function activate(context: vscode.ExtensionContext): Promise<void> {
+  const storage = new ConfigurationStorage(context.globalState);
   const output = vscode.window.createOutputChannel(extensionName, { log: true });
   const discovery = new ModelDiscovery(context.secrets);
   const modelsChanged = new vscode.EventEmitter<void>();
   context.subscriptions.push(modelsChanged);
   const loadModels = async (force = false): Promise<ModelConfig[]> => {
-    const manual = configuredModels();
+    const manual = storage.models;
     const discovered: ModelConfig[] = [];
-    for (const profile of configuredProfiles().filter((profile) => profile.discover !== false)) {
+    for (const profile of storage.profiles.filter((profile) => profile.discover !== false)) {
       const hasManual = manual.some((model) => model.profileId === profile.id);
       if (hasManual) {
         continue;
@@ -209,8 +203,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     output,
     vscode.commands.registerCommand(`${section}.setApiKey`, async () => {
-      const profiles = configuredProfiles();
-      const models = configuredModels();
+      const profiles = storage.profiles;
+      const models = storage.models;
       const entries = [
         ...profiles.map((profile) => ({
           label: profile.id,
@@ -237,7 +231,7 @@ export function activate(context: vscode.ExtensionContext): void {
       let profile = 'profile' in picked ? picked.profile : undefined;
       const model = 'model' in picked ? picked.model : undefined;
       if (!profile && !model) {
-        profile = await createProfile();
+        profile = await createProfile(storage);
         if (!profile) {
           return;
         }
@@ -252,9 +246,7 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       if (profile && !profiles.some((value) => value.id === profile!.id)) {
-        await vscode.workspace
-          .getConfiguration(section)
-          .update('profiles', [...profiles, profile], vscode.ConfigurationTarget.Global);
+        await storage.updateProfiles([...profiles, profile]);
       }
       await context.secrets.store(
         profile ? profileSecretName(profile.id) : secretName(model!),
@@ -278,8 +270,8 @@ export function activate(context: vscode.ExtensionContext): void {
   );
   context.subscriptions.push(
     vscode.commands.registerCommand(`${section}.deleteConfigured`, async () => {
-      const profiles = configuredProfiles();
-      const models = configuredModels();
+      const profiles = storage.profiles;
+      const models = storage.models;
       const entries = [
         ...profiles.map((profile) => ({
           label: profile.id,
@@ -308,24 +300,14 @@ export function activate(context: vscode.ExtensionContext): void {
         return;
       }
       if (profile) {
-        await vscode.workspace.getConfiguration(section).update(
-          'profiles',
+        await storage.update(
           profiles.filter((value) => value.id !== profile.id),
-          vscode.ConfigurationTarget.Global
-        );
-        await vscode.workspace.getConfiguration(section).update(
-          'models',
-          models.filter((value) => value.profileId !== profile.id),
-          vscode.ConfigurationTarget.Global
+          models.filter((value) => value.profileId !== profile.id)
         );
         await context.secrets.delete(profileSecretName(profile.id));
         discovery.clear(profile.id);
       } else {
-        await vscode.workspace.getConfiguration(section).update(
-          'models',
-          models.filter((value) => value.id !== model!.id),
-          vscode.ConfigurationTarget.Global
-        );
+        await storage.updateModels(models.filter((value) => value.id !== model!.id));
         if (!model!.profileId) {
           await context.secrets.delete(secretName(model!));
         }
@@ -340,17 +322,6 @@ export function activate(context: vscode.ExtensionContext): void {
       const models = await loadModels(true);
       modelsChanged.fire();
       vscode.window.showInformationMessage(`${extensionName}: found ${models.length} model(s).`);
-    })
-  );
-
-  context.subscriptions.push(
-    vscode.workspace.onDidChangeConfiguration((event) => {
-      if (
-        event.affectsConfiguration(`${section}.models`) ||
-        event.affectsConfiguration(`${section}.profiles`)
-      ) {
-        modelsChanged.fire();
-      }
     })
   );
 
@@ -375,7 +346,7 @@ export function activate(context: vscode.ExtensionContext): void {
         try {
           const result = streamText({
             model: await languageModel(configured, context.secrets),
-            messages: toModelMessages(messages.map(asInputMessage)),
+            ...toModelPrompt(messages.map(asInputMessage)),
             maxOutputTokens: configured.maxOutputTokens,
             tools,
             toolChoice:

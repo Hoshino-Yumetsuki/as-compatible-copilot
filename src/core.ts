@@ -39,11 +39,17 @@ function text(parts: readonly InputPart[]): string {
     .join('');
 }
 
-export function toModelMessages(messages: readonly InputMessage[]): ModelMessage[] {
+export function toModelPrompt(messages: readonly InputMessage[]): {
+  instructions?: Array<{ role: 'system'; content: string }>;
+  messages: ModelMessage[];
+} {
+  const instructions: Array<{ role: 'system'; content: string }> = [];
+  const modelMessages: ModelMessage[] = [];
   const toolNames = new Map<string, string>();
-  return messages.map((message) => {
+  for (const message of messages) {
     if (message.role === 'system') {
-      return { role: 'system', content: text(message.content) };
+      instructions.push({ role: 'system', content: text(message.content) });
+      continue;
     }
     if (message.role === 'assistant') {
       const content: AssistantContent = [];
@@ -60,7 +66,8 @@ export function toModelMessages(messages: readonly InputMessage[]): ModelMessage
           });
         }
       }
-      return { role: 'assistant', content };
+      modelMessages.push({ role: 'assistant', content });
+      continue;
     }
 
     const toolResults: ToolContent = [];
@@ -75,7 +82,8 @@ export function toModelMessages(messages: readonly InputMessage[]): ModelMessage
       }
     }
     if (toolResults.length) {
-      return { role: 'tool', content: toolResults };
+      modelMessages.push({ role: 'tool', content: toolResults });
+      continue;
     }
 
     const content: UserContent = [];
@@ -86,8 +94,12 @@ export function toModelMessages(messages: readonly InputMessage[]): ModelMessage
         content.push({ type: 'image', image: part.data, mediaType: part.mimeType });
       }
     }
-    return { role: 'user', content };
-  });
+    modelMessages.push({ role: 'user', content });
+  }
+  return {
+    instructions: instructions.length ? instructions : undefined,
+    messages: modelMessages
+  };
 }
 
 export function estimateTokens(value: string | InputMessage): number {

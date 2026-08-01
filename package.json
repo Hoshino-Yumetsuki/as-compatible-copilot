@@ -36,142 +36,18 @@
     ],
     "commands": [
       {
-        "command": "oaiCompatibleAiSdk.setApiKey",
+        "command": "asCompatibleCopilot.setApiKey",
         "title": "AS Compatible Provider for Copilot: Set API Key"
       },
       {
-        "command": "oaiCompatibleAiSdk.deleteConfigured",
+        "command": "asCompatibleCopilot.deleteConfigured",
         "title": "AS Compatible Provider for Copilot: Delete Configured Entry"
       },
       {
-        "command": "oaiCompatibleAiSdk.refreshModels",
+        "command": "asCompatibleCopilot.refreshModels",
         "title": "AS Compatible Provider for Copilot: Refresh Discovered Models"
       }
-    ],
-    "configuration": {
-      "title": "AS Compatible Provider for Copilot",
-      "properties": {
-        "oaiCompatibleAiSdk.models": {
-          "type": "array",
-          "default": [],
-          "scope": "application",
-          "description": "Language models exposed by this provider.",
-          "items": {
-            "type": "object",
-            "required": [
-              "id",
-              "provider",
-              "model"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Unique model ID within this extension."
-              },
-              "name": {
-                "type": "string",
-                "description": "Display name. Defaults to the model ID."
-              },
-              "provider": {
-                "type": "string",
-                "enum": [
-                  "anthropic",
-                  "google",
-                  "openai-compatible",
-                  "openai-responses"
-                ]
-              },
-              "model": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Provider model identifier."
-              },
-              "baseURL": {
-                "type": "string",
-                "description": "Required for OpenAI-compatible Chat Completions; optional for OpenAI Responses."
-              },
-              "profileId": {
-                "type": "string",
-                "description": "Optional provider profile ID. Manual models with this profile suppress automatic discovery for it."
-              },
-              "maxInputTokens": {
-                "type": "integer",
-                "minimum": 1,
-                "default": 128000
-              },
-              "maxOutputTokens": {
-                "type": "integer",
-                "minimum": 1,
-                "default": 16384
-              },
-              "toolCalling": {
-                "type": "boolean",
-                "default": true
-              },
-              "imageInput": {
-                "type": "boolean",
-                "default": true
-              }
-            }
-          }
-        },
-        "oaiCompatibleAiSdk.profiles": {
-          "type": "array",
-          "default": [],
-          "scope": "application",
-          "description": "Provider connections used to discover available models.",
-          "items": {
-            "type": "object",
-            "required": [
-              "id",
-              "provider"
-            ],
-            "properties": {
-              "id": {
-                "type": "string",
-                "minLength": 1,
-                "description": "Unique provider profile ID."
-              },
-              "provider": {
-                "type": "string",
-                "enum": [
-                  "anthropic",
-                  "google",
-                  "openai-compatible",
-                  "openai-responses"
-                ]
-              },
-              "baseURL": {
-                "type": "string",
-                "format": "uri",
-                "description": "Provider API root. Required for OpenAI-compatible endpoints."
-              },
-              "discover": {
-                "type": "boolean",
-                "default": true
-              }
-            },
-            "allOf": [
-              {
-                "if": {
-                  "properties": {
-                    "provider": {
-                      "const": "openai-compatible"
-                    }
-                  }
-                },
-                "then": {
-                  "required": [
-                    "baseURL"
-                  ]
-                }
-              }
-            ]
-          }
-        }
-      }
-    }
+    ]
   },
   "packageManager": "yarn@4.17.1",
   "scripts": {
@@ -180,7 +56,7 @@
     "build:vsce": "node --run build && vsce package --no-yarn",
     "bundle:test": "rolldown -c rolldown.test.config.mjs",
     "build": "node --run clean && node --run bundle",
-    "test": "node --run clean && node --run typecheck && node --run bundle:test && node --test dist/test/*.test.js",
+    "test": "node --run clean && node --run lint && node --run bundle:test && node --test dist/test/*.test.js",
     "lint": "oxlint",
     "lint-fix": "oxlint --fix && oxfmt"
   },

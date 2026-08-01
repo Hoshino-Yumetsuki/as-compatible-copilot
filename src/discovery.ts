@@ -258,7 +258,7 @@ export class ModelDiscovery {
     const generation = this.generation(profile.id);
     const globalGeneration = this.globalGeneration;
     const request = (async () => {
-      const apiKey = await this.secrets.get(`oaiCompatibleAiSdk.apiKey.profile.${profile.id}`);
+      const apiKey = await this.secrets.get(`asCompatibleCopilot.apiKey.profile.${profile.id}`);
       if (!apiKey) {
         throw new Error(`No API key for profile ${profile.id}.`);
       }

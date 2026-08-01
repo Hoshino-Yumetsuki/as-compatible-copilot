@@ -8,17 +8,21 @@ import {
   type ProviderProfile
 } from '../src/discovery.js';
 
+function requestUrl(input: RequestInfo | URL): string {
+  return typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
+}
+
 const openai: ProviderProfile = {
   id: 'local',
   provider: 'openai-compatible',
   baseURL: 'https://example.test/v1'
 };
 
-test('discovers OpenAI-compatible models with bearer authentication', async () => {
+void test('discovers OpenAI-compatible models with bearer authentication', async () => {
   let request: { url: string; authorization?: string } | undefined;
   const models = await discoverModels(openai, 'secret', async (input, init) => {
     request = {
-      url: String(input),
+      url: requestUrl(input),
       authorization: new Headers(init?.headers).get('authorization') ?? undefined
     };
     return new Response(JSON.stringify({ data: [{ id: 'model-a' }, {}, { id: '' }] }), {
@@ -34,7 +38,7 @@ test('discovers OpenAI-compatible models with bearer authentication', async () =
   assert.equal(models[0].maxInputTokens, 128000);
 });
 
-test('discovers paginated Gemini models and normalizes names', async () => {
+void test('discovers paginated Gemini models and normalizes names', async () => {
   const profile: ProviderProfile = {
     id: 'gemini',
     provider: 'google',
@@ -42,7 +46,7 @@ test('discovers paginated Gemini models and normalizes names', async () => {
   };
   const requests: string[] = [];
   const models = await discoverModels(profile, 'key', async (input, init) => {
-    requests.push(`${String(input)}:${new Headers(init?.headers).get('x-goog-api-key')}`);
+    requests.push(`${requestUrl(input)}:${new Headers(init?.headers).get('x-goog-api-key')}`);
     return requests.length === 1
       ? new Response(
           JSON.stringify({
@@ -69,7 +73,7 @@ test('discovers paginated Gemini models and normalizes names', async () => {
   assert.equal(models[1].model, 'gemini-2.5-flash');
 });
 
-test('builds and paginates Anthropic model endpoint and metadata', async () => {
+void test('builds and paginates Anthropic model endpoint and metadata', async () => {
   assert.deepEqual(
     discoveryRequest({ id: 'a', provider: 'anthropic', baseURL: 'https://api.anthropic.com/v1' }),
     {
@@ -84,7 +88,7 @@ test('builds and paginates Anthropic model endpoint and metadata', async () => {
     async (input, init) => {
       const headers = new Headers(init?.headers);
       requests.push({
-        url: String(input),
+        url: requestUrl(input),
         key: headers.get('x-api-key'),
         version: headers.get('anthropic-version')
       });
@@ -119,7 +123,7 @@ test('builds and paginates Anthropic model endpoint and metadata', async () => {
   assert.equal(models[1].model, 'claude-b');
 });
 
-test('manual models win and discovery cache supports expiry force and clear', async () => {
+void test('manual models win and discovery cache supports expiry force and clear', async () => {
   const manual = { id: 'local/model-a', provider: 'anthropic' as const, model: 'manual' };
   const remote = { id: 'local/model-a', provider: 'anthropic' as const, model: 'remote' };
   assert.equal(mergeModels([manual], [remote])[0].model, 'manual');
@@ -149,7 +153,7 @@ test('manual models win and discovery cache supports expiry force and clear', as
   assert.equal(calls, 4);
 });
 
-test('missing discovery key fails without issuing a request', async () => {
+void test('missing discovery key fails without issuing a request', async () => {
   let calls = 0;
   const discovery = new ModelDiscovery({ get: async () => undefined }, async () => {
     calls++;
@@ -159,7 +163,7 @@ test('missing discovery key fails without issuing a request', async () => {
   assert.equal(calls, 0);
 });
 
-test('discovery errors do not expose API keys', async () => {
+void test('discovery errors do not expose API keys', async () => {
   await assert.rejects(
     () => discoverModels(openai, 'top-secret', async () => new Response('', { status: 500 })),
     (error) => {
