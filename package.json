@@ -1,0 +1,202 @@
+{
+  "name": "as-compatible-provider",
+  "displayName": "AS Compatible Provider for Copilot",
+  "description": "Copilot LLM provider backed by Vercel AI SDK.",
+  "version": "0.0.1",
+  "publisher": "local",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.130.0"
+  },
+  "enabledApiProposals": [
+    "chatProvider",
+    "languageModelSystem"
+  ],
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.cjs",
+  "type": "commonjs",
+  "files": [
+    "dist/extension.cjs"
+  ],
+  "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "ai-sdk",
+        "displayName": "AS Compatible Provider for Copilot"
+      }
+    ],
+    "commands": [
+      {
+        "command": "oaiCompatibleAiSdk.setApiKey",
+        "title": "AS Compatible Provider for Copilot: Set API Key"
+      },
+      {
+        "command": "oaiCompatibleAiSdk.deleteConfigured",
+        "title": "AS Compatible Provider for Copilot: Delete Configured Entry"
+      },
+      {
+        "command": "oaiCompatibleAiSdk.refreshModels",
+        "title": "AS Compatible Provider for Copilot: Refresh Discovered Models"
+      }
+    ],
+    "configuration": {
+      "title": "AS Compatible Provider for Copilot",
+      "properties": {
+        "oaiCompatibleAiSdk.models": {
+          "type": "array",
+          "default": [],
+          "scope": "application",
+          "description": "Language models exposed by this provider.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "provider",
+              "model"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Unique model ID within this extension."
+              },
+              "name": {
+                "type": "string",
+                "description": "Display name. Defaults to the model ID."
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "anthropic",
+                  "google",
+                  "openai-compatible",
+                  "openai-responses"
+                ]
+              },
+              "model": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Provider model identifier."
+              },
+              "baseURL": {
+                "type": "string",
+                "description": "Required for OpenAI-compatible Chat Completions; optional for OpenAI Responses."
+              },
+              "profileId": {
+                "type": "string",
+                "description": "Optional provider profile ID. Manual models with this profile suppress automatic discovery for it."
+              },
+              "maxInputTokens": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 128000
+              },
+              "maxOutputTokens": {
+                "type": "integer",
+                "minimum": 1,
+                "default": 16384
+              },
+              "toolCalling": {
+                "type": "boolean",
+                "default": true
+              },
+              "imageInput": {
+                "type": "boolean",
+                "default": true
+              }
+            }
+          }
+        },
+        "oaiCompatibleAiSdk.profiles": {
+          "type": "array",
+          "default": [],
+          "scope": "application",
+          "description": "Provider connections used to discover available models.",
+          "items": {
+            "type": "object",
+            "required": [
+              "id",
+              "provider"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1,
+                "description": "Unique provider profile ID."
+              },
+              "provider": {
+                "type": "string",
+                "enum": [
+                  "anthropic",
+                  "google",
+                  "openai-compatible",
+                  "openai-responses"
+                ]
+              },
+              "baseURL": {
+                "type": "string",
+                "format": "uri",
+                "description": "Provider API root. Required for OpenAI-compatible endpoints."
+              },
+              "discover": {
+                "type": "boolean",
+                "default": true
+              }
+            },
+            "allOf": [
+              {
+                "if": {
+                  "properties": {
+                    "provider": {
+                      "const": "openai-compatible"
+                    }
+                  }
+                },
+                "then": {
+                  "required": [
+                    "baseURL"
+                  ]
+                }
+              }
+            ]
+          }
+        }
+      }
+    }
+  },
+  "packageManager": "yarn@4.17.1",
+  "scripts": {
+    "clean": "rimraf dist",
+    "bundle": "rolldown -c rolldown.config.mjs",
+    "pack": "vsce package --no-yarn",
+    "bundle:test": "rolldown -c rolldown.test.config.mjs",
+    "build": "yarn clean && yarn bundle",
+    "test": "yarn clean && yarn typecheck && yarn bundle:test && node --test dist/test/*.test.js",
+    "lint": "oxlint",
+    "lint-fix": "oxlint --fix && oxfmt"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.25",
+    "@ai-sdk/google": "^4.0.29",
+    "@ai-sdk/openai": "^4.0.25",
+    "@ai-sdk/openai-compatible": "^3.0.18",
+    "ai": "^7.0.44",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.2",
+    "@types/vscode": "^1.125.0",
+    "@vscode/vsce": "^3.9.2",
+    "oxfmt": "^0.61.0",
+    "oxlint": "^1.76.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "rimraf": "^6.1.3",
+    "rolldown": "^1.2.1",
+    "typescript": "^7.0.2"
+  }
+}
