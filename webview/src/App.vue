@@ -28,6 +28,7 @@ const blankModel = (): FormModel => ({ model: '', profileId: '', contextLength: 
     const state = reactive<State>({ profiles: [], models: [], manualModelIds: [], settings: { reasoningEffort: 'medium', contextLength: 256000, modelOverrides: {} }, keys: {} });
     const status = ref('Loading configuration');
     const error = ref('');
+    const busy = ref(false);
     const profileDraft = reactive(blankProfile());
     const modelDraft = reactive(blankModel());
     const editingProfile = ref<string>();
@@ -69,6 +70,7 @@ const blankModel = (): FormModel => ({ model: '', profileId: '', contextLength: 
       closeModel();
     };
     const removeProfile = (profile: Profile) => {
+      status.value = `Confirm deletion of ${profile.id}`;
       vscode.postMessage({ type: 'deleteProfile', id: profile.id });
     };
     const removeModel = (model: Model) => {

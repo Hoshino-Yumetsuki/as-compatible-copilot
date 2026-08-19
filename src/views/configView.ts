@@ -149,7 +149,12 @@ export class ConfigView {
         case 'deleteProfile': {
           if (typeof input.id !== 'string' || !input.id.trim()) throw new Error('Invalid provider ID.');
           const id = input.id.trim();
-          await this.storage.update(this.storage.profiles.filter((profile) => profile.id !== id), this.storage.models.filter((model) => model.profileId !== id));
+          const profile = this.storage.profiles.find((value) => value.id === id);
+          if (!profile) throw new Error('Provider profile no longer exists.');
+          const modelCount = this.storage.models.filter((model) => model.profileId === id).length;
+          const detail = modelCount ? ` Its ${modelCount} configured model${modelCount === 1 ? '' : 's'} will also be removed.` : '';
+          if ((await vscode.window.showWarningMessage(`Delete provider profile "${id}"?${detail}`, { modal: true }, 'Delete')) !== 'Delete') return;
+          await this.storage.update(this.storage.profiles.filter((value) => value.id !== id), this.storage.models.filter((model) => model.profileId !== id));
           await this.context.secrets.delete(profileKey(id));
           this.discovery.clear(id);
           break;
