@@ -23,8 +23,8 @@
 
 ## 环境要求
 
-- VS Code `>= 1.126.0`
-- GitHub Copilot 扩展（需启用 `chatProvider` 和 `languageModelSystem` 提案 API）
+- VS Code `>= 1.140.0`，并启用 Copilot Chat。基础聊天和工具调用不需要启用提案 API。
+- 使用本机的 Copilot harness 会话时，组织策略须允许 BYOK，且 `chat.agentHost.byokModels.enabled` 须启用。在此注册的模型并不会自动适用于所有远程或云端会话。
 
 ## 快速开始
 
@@ -77,7 +77,7 @@
 
 ## 推理强度控制
 
-对于支持推理功能的模型（如 Claude、GPT 等），可在全局设置中配置推理强度，也可通过模型覆盖（Model Overrides）为特定模型单独设置：
+对于支持推理档位的 Anthropic 和 OpenAI Responses 模型，Copilot 模型选择器中的选择优先于模型或全局默认值。选择器只列出该模型已识别的档位；无法识别时不会向上游发送档位参数。上游返回推理内容和用量时，支持的宿主可直接显示。用于续接的私有状态不会作为聊天文字显示；若宿主未保留该状态，或用户切换了模型或端点，插件会跳过它，而不会将其转发给其他模型。
 
 | 档位 | 说明 |
 |---|---|

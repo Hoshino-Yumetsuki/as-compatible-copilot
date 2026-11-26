@@ -23,8 +23,8 @@ English | [简体中文](README.zh-CN.md)
 
 ## Requirements
 
-- VS Code `>= 1.126.0`
-- GitHub Copilot extension (with `chatProvider` and `languageModelSystem` proposed APIs enabled)
+- VS Code `>= 1.140.0` with Copilot Chat enabled. No proposed API flags are required for basic chat or tools.
+- For local Copilot harness sessions, BYOK must be allowed by policy and `chat.agentHost.byokModels.enabled` must be enabled. Registering a model here does not make it available in every remote or cloud session.
 
 ## Quick Start
 
@@ -77,7 +77,7 @@ Each Provider Profile corresponds to a separate upstream API service. You can co
 
 ## Reasoning Effort Control
 
-For models that support reasoning (e.g. Claude, GPT), you can configure the reasoning effort level globally or override it per model using Model Overrides:
+On supported Anthropic and OpenAI Responses models, the Copilot model picker's selection takes precedence over the model or global default. The picker only lists levels recognized for that model; unknown models are not sent an effort parameter. The host can display streamed reasoning and token usage when the upstream returns them. Private continuation data is never displayed as chat text. If the host omits it, or the model or endpoint changes, the extension skips that state instead of forwarding it to another model.
 
 | Level | Description |
 |---|---|
