@@ -403,8 +403,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             } else if (part.type === 'error') {
               throw part.error;
             } else if (part.type === 'finish') {
-              const line = formatUsage(part.totalUsage);
+              const usage = part.totalUsage;
+              const line = formatUsage(usage);
               if (line) {
+                const reasoning = usage.outputTokenDetails?.reasoningTokens;
+                progress.report(
+                  new vscode.LanguageModelDataPart(
+                    Buffer.from(
+                      JSON.stringify({
+                        prompt_tokens: usage.inputTokens,
+                        completion_tokens: usage.outputTokens,
+                        total_tokens: usage.totalTokens,
+                        ...(reasoning === undefined
+                          ? {}
+                          : { completion_tokens_details: { reasoning_tokens: reasoning } })
+                      })
+                    ),
+                    'usage'
+                  )
+                );
                 output.appendLine(`[${configured.id}] ${line}`);
               }
             }
