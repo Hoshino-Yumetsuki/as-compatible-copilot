@@ -105,6 +105,13 @@ async function createProfile(storage: ConfigurationStorage): Promise<ProviderPro
   };
 }
 
+// Optional host extensions to the stable provider contract. Basic chat never needs a proposal.
+const systemRole = (
+  vscode.LanguageModelChatMessageRole as typeof vscode.LanguageModelChatMessageRole & {
+    System?: number;
+  }
+).System;
+
 function asInputPart(part: unknown): InputPart | undefined {
   if (part instanceof vscode.LanguageModelTextPart) {
     return { type: 'text', value: part.value };
@@ -128,7 +135,7 @@ function asInputPart(part: unknown): InputPart | undefined {
 function asInputMessage(message: vscode.LanguageModelChatRequestMessage): InputMessage {
   return {
     role:
-      message.role === vscode.LanguageModelChatMessageRole.System
+      message.role === systemRole
         ? 'system'
         : message.role === vscode.LanguageModelChatMessageRole.Assistant
           ? 'assistant'
