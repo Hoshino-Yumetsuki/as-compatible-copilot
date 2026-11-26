@@ -16,6 +16,7 @@ export interface ModelConfig {
   maxInputTokens?: number;
   maxOutputTokens?: number;
   contextLength?: number;
+  maxContextWindowTokens?: number;
   toolCalling?: boolean;
   imageInput?: boolean;
   reasoningEffort?: ReasoningEffort;
@@ -83,6 +84,28 @@ export function reasoningProviderOptions(
     return { openai: { reasoningEffort: model.reasoningEffort } };
   }
   return undefined;
+}
+
+export function tokenLimits(model: ModelConfig) {
+  const window = Math.max(
+    2,
+    Math.min(
+      positiveInteger(model.contextLength) ?? DEFAULT_CONTEXT_LENGTH,
+      positiveInteger(model.maxContextWindowTokens) ?? Infinity
+    )
+  );
+  const outputLimit = positiveInteger(model.maxOutputTokens) ?? 16384;
+  // If the output ceiling alone fills the window, reserve room for the prompt too.
+  const maxOutputTokens = outputLimit < window ? outputLimit : Math.floor(window / 2);
+  const maxInputTokens = Math.min(
+    positiveInteger(model.maxInputTokens) ?? Infinity,
+    window - maxOutputTokens
+  );
+  return {
+    maxInputTokens,
+    maxOutputTokens,
+    maxContextWindowTokens: maxInputTokens + maxOutputTokens
+  };
 }
 
 export function assertModelCapabilities(

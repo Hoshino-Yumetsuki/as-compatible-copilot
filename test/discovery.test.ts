@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { tokenLimits } from '../src/core.js';
 import {
   discoverModels,
   discoveryRequest,
@@ -25,9 +26,12 @@ void test('discovers OpenAI-compatible models with bearer authentication', async
       url: requestUrl(input),
       authorization: new Headers(init?.headers).get('authorization') ?? undefined
     };
-    return new Response(JSON.stringify({ data: [{ id: 'model-a' }, {}, { id: '' }] }), {
-      status: 200
-    });
+    return new Response(
+      JSON.stringify({ data: [{ id: 'model-a', context_length: 8192 }, {}, { id: '' }] }),
+      {
+        status: 200
+      }
+    );
   });
   assert.deepEqual(request, {
     url: 'https://example.test/v1/models',
@@ -35,7 +39,11 @@ void test('discovers OpenAI-compatible models with bearer authentication', async
   });
   assert.equal(models.length, 1);
   assert.equal(models[0].id, 'local/model-a');
-  assert.equal(models[0].maxInputTokens, 256000);
+  assert.deepEqual(tokenLimits({ ...models[0], contextLength: 256000 }), {
+    maxInputTokens: 4096,
+    maxOutputTokens: 4096,
+    maxContextWindowTokens: 8192
+  });
 });
 
 void test('discovers paginated Gemini models and normalizes names', async () => {

@@ -1,4 +1,4 @@
-import { DEFAULT_CONTEXT_LENGTH, type ModelConfig, type ProviderKind } from './core';
+import type { ModelConfig, ProviderKind } from './core';
 
 export interface ProviderProfile {
   id: string;
@@ -11,9 +11,6 @@ export interface DiscoveryResult {
   models: ModelConfig[];
   expiresAt: number;
 }
-
-export const DEFAULT_DISCOVERY_MAX_INPUT = DEFAULT_CONTEXT_LENGTH;
-export const DEFAULT_DISCOVERY_MAX_OUTPUT = 16384;
 
 function modelId(value: unknown): string | undefined {
   if (typeof value !== 'string' || !value.trim()) {
@@ -51,7 +48,7 @@ function asModel(profile: ProviderProfile, raw: Record<string, unknown>): ModelC
   const displayNameValue = raw.displayName ?? raw.display_name;
   const displayName =
     typeof displayNameValue === 'string' && displayNameValue.trim() ? displayNameValue : undefined;
-  const input = numberValue(raw.inputTokenLimit ?? raw.max_input_tokens ?? raw.context_length);
+  const input = numberValue(raw.inputTokenLimit ?? raw.max_input_tokens);
   const output = numberValue(raw.outputTokenLimit ?? raw.max_output_tokens ?? raw.max_tokens);
   const modalities = raw.inputModalities;
   const capabilities =
@@ -76,8 +73,9 @@ function asModel(profile: ProviderProfile, raw: Record<string, unknown>): ModelC
     model: id,
     baseURL: inferenceBaseURL(profile),
     profileId: profile.id,
-    maxInputTokens: input ?? DEFAULT_DISCOVERY_MAX_INPUT,
-    maxOutputTokens: output ?? DEFAULT_DISCOVERY_MAX_OUTPUT,
+    maxInputTokens: input,
+    maxOutputTokens: output,
+    maxContextWindowTokens: numberValue(raw.context_length),
     toolCalling: true,
     imageInput: imageInput ?? true
   };

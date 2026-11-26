@@ -14,7 +14,7 @@ import {
   type InputMessage,
   type InputPart,
   type ModelConfig,
-  DEFAULT_CONTEXT_LENGTH
+  tokenLimits
 } from './core';
 import { mergeModels, ModelDiscovery, type ProviderProfile } from './discovery';
 import { ConfigurationStorage } from './storage';
@@ -145,20 +145,14 @@ function asInputMessage(message: vscode.LanguageModelChatRequestMessage): InputM
   };
 }
 
-function information(
-  model: ModelConfig,
-  settings: import('./core').ExtensionSettings
-): vscode.LanguageModelChatInformation & ModelConfig {
+function information(model: ModelConfig, settings: import('./core').ExtensionSettings) {
   const configured = effectiveModelConfig(model, settings);
-  const maxOutputTokens = configured.maxOutputTokens ?? 16384;
-  const contextLength = configured.contextLength ?? DEFAULT_CONTEXT_LENGTH;
   return {
     ...configured,
     name: configured.id,
     family: configured.provider,
     version: configured.model,
-    maxInputTokens: Math.max(1, contextLength - maxOutputTokens),
-    maxOutputTokens,
+    ...tokenLimits(configured),
     capabilities: {
       toolCalling: configured.toolCalling ?? true,
       imageInput: configured.imageInput ?? true
@@ -353,10 +347,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       provideLanguageModelChatInformation: () =>
         loadModels().then((models) => models.map((model) => information(model, storage.settings))),
       async provideLanguageModelChatResponse(model, messages, options, progress, token) {
-        const configured = effectiveModelConfig(
-          model as vscode.LanguageModelChatInformation & ModelConfig,
-          storage.settings
-        );
+        const configured = model as ReturnType<typeof information>;
         const inputMessages = messages.map(asInputMessage);
         assertModelCapabilities(
           configured,
