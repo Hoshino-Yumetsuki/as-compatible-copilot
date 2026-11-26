@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { tokenLimits } from '../src/core.js';
+import { reasoningProviderOptions, tokenLimits } from '../src/core.js';
 import {
   discoverModels,
   discoveryRequest,
@@ -109,7 +109,14 @@ void test('builds and paginates Anthropic model endpoint and metadata', async ()
                   display_name: 'Claude A',
                   max_input_tokens: 200000,
                   max_tokens: 32000,
-                  capabilities: { image_input: { supported: false } }
+                  capabilities: {
+                    image_input: { supported: false },
+                    effort: {
+                      supported: true,
+                      low: { supported: true },
+                      high: { supported: false }
+                    }
+                  }
                 }
               ],
               has_more: true,
@@ -127,6 +134,8 @@ void test('builds and paginates Anthropic model endpoint and metadata', async ()
   assert.equal(models[0].maxInputTokens, 200000);
   assert.equal(models[0].maxOutputTokens, 32000);
   assert.equal(models[0].imageInput, false);
+  assert.deepEqual(reasoningProviderOptions(models[0], 'high'), { anthropic: { effort: 'low' } });
+  assert.equal(reasoningProviderOptions(models[1], 'high'), undefined);
   assert.equal(models[0].baseURL, 'https://proxy.test/v1');
   assert.equal(models[1].model, 'claude-b');
 });

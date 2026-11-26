@@ -27,7 +27,7 @@ void test('applies provider options and capability policy', () => {
     reasoningProviderOptions({
       id: 'a',
       provider: 'anthropic',
-      model: 'a',
+      model: 'claude-opus-4-6',
       reasoningEffort: 'high'
     }),
     { anthropic: { effort: 'high' } }
@@ -36,7 +36,7 @@ void test('applies provider options and capability policy', () => {
     reasoningProviderOptions({
       id: 'o',
       provider: 'openai-responses',
-      model: 'o',
+      model: 'o3',
       reasoningEffort: 'low'
     }),
     { openai: { reasoningEffort: 'low' } }

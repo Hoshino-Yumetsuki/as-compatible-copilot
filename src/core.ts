@@ -20,6 +20,7 @@ export interface ModelConfig {
   toolCalling?: boolean;
   imageInput?: boolean;
   reasoningEffort?: ReasoningEffort;
+  supportedReasoningEfforts?: readonly ReasoningEffort[];
 }
 
 export interface ExtensionSettings {
@@ -74,16 +75,44 @@ export function normalizeSettings(value: unknown): ExtensionSettings {
   };
 }
 
-export function reasoningProviderOptions(
-  model: ModelConfig
-): Record<string, Record<string, unknown>> | undefined {
+export function reasoningEfforts(model: ModelConfig): readonly ReasoningEffort[] {
+  if (model.provider !== 'anthropic' && model.provider !== 'openai-responses') return [];
+  if (model.supportedReasoningEfforts) return model.supportedReasoningEfforts;
+  // Discovery is authoritative. For manual models only offer known, compatible levels.
+  const id = model.model;
   if (model.provider === 'anthropic') {
-    return { anthropic: { effort: model.reasoningEffort } };
+    if (/^claude-(?:opus-4-[78]|(?:opus|sonnet|haiku|fable)-5)/.test(id)) return REASONING_EFFORTS;
+    if (/^claude-opus-4-6/.test(id)) return ['low', 'medium', 'high', 'max'];
+    if (/^claude-(?:opus-4-5|sonnet-4-6)/.test(id)) return ['low', 'medium', 'high'];
+  } else {
+    if (/^gpt-\d+-chat|^o1-(?:preview|mini)/.test(id)) return [];
+    if (/^gpt-6(?:[.-]|$)/.test(id)) return REASONING_EFFORTS;
+    if (/^gpt-5(?:\.\d+)?-pro(?:-|$)|^o3-pro(?:-|$)/.test(id)) return ['high'];
+    if (/^gpt-5\.[2-9](?:-|$)/.test(id)) return ['low', 'medium', 'high', 'xhigh'];
+    if (/^(?:o[134]|gpt-5)(?:[.-]|$)/.test(id)) return ['low', 'medium', 'high'];
   }
-  if (model.provider === 'openai-responses') {
-    return { openai: { reasoningEffort: model.reasoningEffort } };
+  return [];
+}
+
+export function selectReasoningEffort(
+  model: ModelConfig,
+  requested?: unknown
+): ReasoningEffort | undefined {
+  const levels = reasoningEfforts(model);
+  for (const value of [requested, model.reasoningEffort, 'medium']) {
+    if (isReasoningEffort(value) && levels.includes(value)) return value;
   }
-  return undefined;
+  return levels[0];
+}
+
+export function reasoningProviderOptions(
+  model: ModelConfig,
+  requested?: unknown
+): NonNullable<Parameters<typeof import('ai').streamText>[0]['providerOptions']> | undefined {
+  const effort = selectReasoningEffort(model, requested);
+  if (!effort) return undefined;
+  if (model.provider === 'anthropic') return { anthropic: { effort } };
+  return { openai: { reasoningEffort: effort } };
 }
 
 export function tokenLimits(model: ModelConfig) {

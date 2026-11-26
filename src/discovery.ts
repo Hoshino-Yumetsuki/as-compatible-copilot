@@ -1,4 +1,4 @@
-import type { ModelConfig, ProviderKind } from './core';
+import { REASONING_EFFORTS, type ModelConfig, type ProviderKind } from './core';
 
 export interface ProviderProfile {
   id: string;
@@ -55,6 +55,16 @@ function asModel(profile: ProviderProfile, raw: Record<string, unknown>): ModelC
     raw.capabilities && typeof raw.capabilities === 'object'
       ? (raw.capabilities as Record<string, unknown>)
       : undefined;
+  const effort = capabilities?.effort;
+  const supportedReasoningEfforts =
+    effort && typeof effort === 'object' && 'supported' in effort
+      ? REASONING_EFFORTS.filter(
+          (level) =>
+            effort.supported === true &&
+            (effort as Record<string, { supported?: boolean } | undefined>)[level]?.supported ===
+              true
+        )
+      : undefined;
   const imageCapability = capabilities?.image_input;
   const imageSupported =
     imageCapability && typeof imageCapability === 'object'
@@ -76,6 +86,7 @@ function asModel(profile: ProviderProfile, raw: Record<string, unknown>): ModelC
     maxInputTokens: input,
     maxOutputTokens: output,
     maxContextWindowTokens: numberValue(raw.context_length),
+    supportedReasoningEfforts,
     toolCalling: true,
     imageInput: imageInput ?? true
   };

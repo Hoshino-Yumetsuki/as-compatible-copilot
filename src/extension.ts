@@ -14,6 +14,8 @@ import {
   type InputMessage,
   type InputPart,
   type ModelConfig,
+  reasoningEfforts,
+  selectReasoningEffort,
   tokenLimits
 } from './core';
 import { mergeModels, ModelDiscovery, type ProviderProfile } from './discovery';
@@ -148,12 +150,28 @@ function asInputMessage(message: vscode.LanguageModelChatRequestMessage): InputM
 
 function information(model: ModelConfig, settings: import('./core').ExtensionSettings) {
   const configured = effectiveModelConfig(model, settings);
+  const efforts = reasoningEfforts(configured);
   return {
     ...configured,
     name: configured.id,
     family: configured.provider,
     version: configured.model,
     ...tokenLimits(configured),
+    ...(efforts.length
+      ? {
+          configurationSchema: {
+            properties: {
+              reasoningEffort: {
+                type: 'string',
+                title: 'Reasoning effort',
+                enum: efforts,
+                default: selectReasoningEffort(configured),
+                group: 'navigation'
+              }
+            }
+          }
+        }
+      : {}),
     capabilities: {
       toolCalling: configured.toolCalling ?? true,
       imageInput: configured.imageInput ?? true
@@ -349,6 +367,13 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         loadModels().then((models) => models.map((model) => information(model, storage.settings))),
       async provideLanguageModelChatResponse(model, messages, options, progress, token) {
         const configured = model as ReturnType<typeof information>;
+        const hostOptions = options as typeof options & {
+          modelConfiguration?: { reasoningEffort?: unknown };
+        };
+        const providerOptions = reasoningProviderOptions(
+          configured,
+          hostOptions.modelConfiguration?.reasoningEffort
+        );
         const inputMessages = messages.map(asInputMessage);
         assertModelCapabilities(
           configured,
@@ -374,7 +399,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
             model: await languageModel(configured, context.secrets),
             ...toModelPrompt(inputMessages, configured),
             maxOutputTokens: configured.maxOutputTokens,
-            providerOptions: reasoningProviderOptions(configured) as never,
+            providerOptions,
             ...(tools ? { tools } : {}),
             ...(tools && options.toolMode === vscode.LanguageModelChatToolMode.Required
               ? { toolChoice: 'required' as const }
