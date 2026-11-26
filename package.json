@@ -2,7 +2,7 @@
   "name": "as-compatible-copilot",
   "displayName": "AS Provider for Copilot",
   "description": "BYOK Copilot LLM provider backed by Vercel AI SDK.",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publisher": "Q78KG",
   "repository": {
     "type": "git",
