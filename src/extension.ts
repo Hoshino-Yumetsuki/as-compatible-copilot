@@ -18,6 +18,7 @@ import {
   selectReasoningEffort,
   tokenLimits
 } from './core';
+import { createReasoningStream, type ThinkingPartData } from './reasoning';
 import { mergeModels, ModelDiscovery, type ProviderProfile } from './discovery';
 import { ConfigurationStorage } from './storage';
 import { ConfigView } from './views/configView';
@@ -40,7 +41,6 @@ const providerLabels: Record<ProviderProfile['provider'], string> = {
   'openai-compatible': 'OpenAI-compatible Chat Completions',
   'openai-responses': 'OpenAI Responses'
 };
-
 
 async function createProfile(storage: ConfigurationStorage): Promise<ProviderProfile | undefined> {
   const provider = await vscode.window.showQuickPick(
@@ -108,6 +108,15 @@ async function createProfile(storage: ConfigurationStorage): Promise<ProviderPro
 }
 
 // Optional host extensions to the stable provider contract. Basic chat never needs a proposal.
+const ThinkingPart = (
+  vscode as typeof vscode & {
+    LanguageModelThinkingPart?: new (
+      value: string | string[],
+      id?: string,
+      metadata?: ThinkingPartData['metadata']
+    ) => ThinkingPartData;
+  }
+).LanguageModelThinkingPart;
 const systemRole = (
   vscode.LanguageModelChatMessageRole as typeof vscode.LanguageModelChatMessageRole & {
     System?: number;
@@ -115,6 +124,7 @@ const systemRole = (
 ).System;
 
 function asInputPart(part: unknown): InputPart | undefined {
+  if (ThinkingPart && part instanceof ThinkingPart) return { type: 'thinking', thinking: part };
   if (part instanceof vscode.LanguageModelTextPart) {
     return { type: 'text', value: part.value };
   }
@@ -179,16 +189,7 @@ function information(model: ModelConfig, settings: import('./core').ExtensionSet
   };
 }
 
-async function languageModel(
-  model: ModelConfig,
-  secrets: vscode.SecretStorage
-): Promise<LanguageModel> {
-  const apiKey = await secrets.get(secretName(model));
-  if (!apiKey) {
-    throw new Error(
-      `No API key for ${model.id}. Run "AS Provider for Copilot: Set API Key".`
-    );
-  }
+function languageModel(model: ModelConfig, apiKey: string): LanguageModel {
   switch (model.provider) {
     case 'anthropic':
       return createAnthropic({ apiKey, baseURL: model.baseURL })(model.model);
@@ -369,11 +370,21 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const configured = model as ReturnType<typeof information>;
         const hostOptions = options as typeof options & {
           modelConfiguration?: { reasoningEffort?: unknown };
+          includeEncryptedThinking?: boolean;
         };
+        const includePrivateState = !!ThinkingPart && hostOptions.includeEncryptedThinking === true;
         const providerOptions = reasoningProviderOptions(
           configured,
-          hostOptions.modelConfiguration?.reasoningEffort
+          hostOptions.modelConfiguration?.reasoningEffort,
+          includePrivateState
         );
+        const apiKey = await context.secrets.get(secretName(configured));
+        if (!apiKey)
+          throw new Error(
+            `No API key for ${configured.id}. Run "AS Provider for Copilot: Set API Key".`
+          );
+        const replayKey = includePrivateState ? apiKey : undefined;
+        const thinking = createReasoningStream(configured, includePrivateState, replayKey);
         const inputMessages = messages.map(asInputMessage);
         assertModelCapabilities(
           configured,
@@ -396,8 +407,14 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         const cancellation = token.onCancellationRequested(() => controller.abort());
         try {
           const result = streamText({
-            model: await languageModel(configured, context.secrets),
-            ...toModelPrompt(inputMessages, configured),
+            model: languageModel(configured, apiKey),
+            ...toModelPrompt(
+              inputMessages,
+              configured,
+              configured.provider !== 'openai-responses' ||
+                providerOptions?.openai?.store === false,
+              replayKey
+            ),
             maxOutputTokens: configured.maxOutputTokens,
             providerOptions,
             ...(tools ? { tools } : {}),
@@ -417,6 +434,18 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
                   part.input as object
                 )
               );
+            } else if (
+              part.type === 'reasoning-start' ||
+              part.type === 'reasoning-delta' ||
+              part.type === 'reasoning-end'
+            ) {
+              const chunk = ThinkingPart && thinking(part);
+              if (ThinkingPart && chunk) {
+                const hostProgress: vscode.Progress<
+                  vscode.LanguageModelResponsePart | ThinkingPartData
+                > = progress;
+                hostProgress.report(new ThinkingPart(chunk.value, chunk.id, chunk.metadata));
+              }
             } else if (part.type === 'error') {
               throw part.error;
             } else if (part.type === 'finish') {

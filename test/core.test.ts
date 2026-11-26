@@ -39,7 +39,7 @@ void test('applies provider options and capability policy', () => {
       model: 'o3',
       reasoningEffort: 'low'
     }),
-    { openai: { reasoningEffort: 'low' } }
+    { openai: { reasoningEffort: 'low', reasoningSummary: 'auto' } }
   );
   const messages = [{ role: 'user' as const, content: [{ type: 'text' as const, value: 'x' }] }];
   assert.throws(

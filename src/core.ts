@@ -1,4 +1,5 @@
 import type { AssistantContent, ModelMessage, ToolContent, UserContent } from 'ai';
+import { toReasoningParts, type ThinkingPartData } from './reasoning';
 
 export type ProviderKind = 'anthropic' | 'google' | 'openai-compatible' | 'openai-responses';
 
@@ -107,12 +108,19 @@ export function selectReasoningEffort(
 
 export function reasoningProviderOptions(
   model: ModelConfig,
-  requested?: unknown
+  requested?: unknown,
+  includePrivateState = false
 ): NonNullable<Parameters<typeof import('ai').streamText>[0]['providerOptions']> | undefined {
   const effort = selectReasoningEffort(model, requested);
   if (!effort) return undefined;
   if (model.provider === 'anthropic') return { anthropic: { effort } };
-  return { openai: { reasoningEffort: effort } };
+  return {
+    openai: {
+      reasoningEffort: effort,
+      reasoningSummary: 'auto',
+      ...(includePrivateState ? { store: false, include: ['reasoning.encrypted_content'] } : {})
+    }
+  };
 }
 
 export function tokenLimits(model: ModelConfig) {
@@ -162,7 +170,8 @@ export function effectiveModelConfig(model: ModelConfig, settings: ExtensionSett
 }
 
 export interface InputPart {
-  type: 'text' | 'tool-call' | 'tool-result' | 'data';
+  type: 'text' | 'tool-call' | 'tool-result' | 'data' | 'thinking';
+  thinking?: ThinkingPartData;
   value?: string;
   callId?: string;
   name?: string;
@@ -197,7 +206,12 @@ function text(parts: readonly InputPart[]): string {
     .join('');
 }
 
-export function toModelPrompt(messages: readonly InputMessage[], model?: ModelConfig): {
+export function toModelPrompt(
+  messages: readonly InputMessage[],
+  model?: ModelConfig,
+  replayReasoning = true,
+  replayKey?: string
+): {
   instructions?: Array<{ role: 'system'; content: string }>;
   messages: ModelMessage[];
 } {
@@ -211,9 +225,16 @@ export function toModelPrompt(messages: readonly InputMessage[], model?: ModelCo
     }
     if (message.role === 'assistant') {
       const content: AssistantContent = [];
-      for (const part of message.content) {
+      for (let i = 0; i < message.content.length; i++) {
+        const part = message.content[i];
         if (part.type === 'text') {
           content.push({ type: 'text', text: part.value ?? '' });
+        } else if (part.type === 'thinking' && part.thinking && model && replayReasoning) {
+          const group = [part.thinking];
+          while (part.thinking.id && message.content[i + 1]?.thinking?.id === part.thinking.id) {
+            group.push(message.content[++i].thinking!);
+          }
+          content.push(...toReasoningParts(group, model, replayKey));
         } else if (part.type === 'tool-call' && part.callId && part.name) {
           toolNames.set(part.callId, part.name);
           content.push({
@@ -224,7 +245,7 @@ export function toModelPrompt(messages: readonly InputMessage[], model?: ModelCo
           });
         }
       }
-      modelMessages.push({ role: 'assistant', content });
+      if (content.length) modelMessages.push({ role: 'assistant', content });
       continue;
     }
 
@@ -306,6 +327,10 @@ export function estimateTokens(value: string | InputMessage): number {
           .map((part) => {
             if (part.type === 'text') {
               return part.value ?? '';
+            }
+            if (part.type === 'thinking') {
+              const value = part.thinking?.value;
+              return Array.isArray(value) ? value.join('') : (value ?? '');
             }
             if (part.type === 'data') {
               return part.data ? 'x'.repeat(Math.ceil(part.data.byteLength / 3)) : '';
