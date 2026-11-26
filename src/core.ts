@@ -116,12 +116,7 @@ export function assertModelCapabilities(
   if (model.toolCalling === false && requiresTools) {
     throw new Error(`Tool calling is disabled for ${model.id}.`);
   }
-  if (
-    model.imageInput === false &&
-    messages.some((message) =>
-      message.content.some((part) => part.type === 'data' && part.mimeType?.startsWith('image/'))
-    )
-  ) {
+  if (model.imageInput === false && messages.some((message) => hasImage(message.content))) {
     throw new Error(`Image input is disabled for ${model.id}.`);
   }
 }
@@ -143,6 +138,7 @@ export interface InputPart {
   callId?: string;
   name?: string;
   input?: unknown;
+  isError?: boolean;
   content?: readonly InputPart[];
   data?: Uint8Array;
   mimeType?: string;
@@ -154,6 +150,17 @@ export interface InputMessage {
   content: readonly InputPart[];
 }
 
+function hasImage(parts: readonly InputPart[]): boolean {
+  return parts.some(
+    (part) =>
+      (part.type === 'data' && part.mimeType?.startsWith('image/')) ||
+      (part.content !== undefined && hasImage(part.content))
+  );
+}
+
+type ToolOutput = Extract<ToolContent[number], { type: 'tool-result' }>['output'];
+type ToolOutputContentPart = Extract<ToolOutput, { type: 'content' }>['value'][number];
+
 function text(parts: readonly InputPart[]): string {
   return parts
     .filter((part) => part.type === 'text')
@@ -161,7 +168,7 @@ function text(parts: readonly InputPart[]): string {
     .join('');
 }
 
-export function toModelPrompt(messages: readonly InputMessage[]): {
+export function toModelPrompt(messages: readonly InputMessage[], model?: ModelConfig): {
   instructions?: Array<{ role: 'system'; content: string }>;
   messages: ModelMessage[];
 } {
@@ -193,30 +200,68 @@ export function toModelPrompt(messages: readonly InputMessage[]): {
     }
 
     const toolResults: ToolContent = [];
+    const toolImages: UserContent = [];
+    const content: UserContent = [];
     for (const part of message.content) {
       if (part.type === 'tool-result' && part.callId) {
+        const result = part.content ?? [];
+        const fallback = model?.provider === 'openai-compatible' && hasImage(result);
+        if (fallback) {
+          for (const item of result) {
+            if (item.type === 'data' && item.data && item.mimeType?.startsWith('image/')) {
+              toolImages.push(
+                { type: 'text', text: `Image from tool result ${JSON.stringify(part.callId)}:` },
+                { type: 'file', data: item.data, mediaType: item.mimeType }
+              );
+            }
+          }
+        }
+        const output: ToolOutput =
+          hasImage(result) && !fallback
+            ? {
+                type: 'content',
+                value: result.flatMap<ToolOutputContentPart>((item) => {
+                  if (item.type === 'text')
+                    return [{ type: 'text' as const, text: item.value ?? '' }];
+                  if (item.type === 'data' && item.data && item.mimeType?.startsWith('image/')) {
+                    return [
+                      {
+                        type: 'file' as const,
+                        mediaType: item.mimeType,
+                        data: { type: 'data' as const, data: item.data }
+                      }
+                    ];
+                  }
+                  return [];
+                })
+              }
+            : {
+                type: part.isError ? 'error-text' : 'text',
+                value:
+                  text(result) +
+                  (fallback
+                    ? `\n[Images for tool result ${JSON.stringify(part.callId)} follow in a user message.]`
+                    : '')
+              };
         toolResults.push({
           type: 'tool-result',
           toolCallId: part.callId,
           toolName: toolNames.get(part.callId) ?? part.name ?? 'tool',
-          output: { type: 'text', value: text(part.content ?? []) }
+          output
         });
+      } else if (part.type === 'text') {
+        content.push({ type: 'text', text: part.value ?? '' });
+      } else if (part.type === 'data' && part.data && part.mimeType?.startsWith('image/')) {
+        content.push({ type: 'file', data: part.data, mediaType: part.mimeType });
       }
     }
     if (toolResults.length) {
-      modelMessages.push({ role: 'tool', content: toolResults });
-      continue;
+      let index = modelMessages.length;
+      while (index > 0 && modelMessages[index - 1].role === 'user') index--;
+      modelMessages.splice(index, 0, { role: 'tool', content: toolResults });
     }
-
-    const content: UserContent = [];
-    for (const part of message.content) {
-      if (part.type === 'text') {
-        content.push({ type: 'text', text: part.value ?? '' });
-      } else if (part.type === 'data' && part.data && part.mimeType?.startsWith('image/')) {
-        content.push({ type: 'image', image: part.data, mediaType: part.mimeType });
-      }
-    }
-    modelMessages.push({ role: 'user', content });
+    if (toolImages.length) modelMessages.push({ role: 'user', content: toolImages });
+    if (content.length || !toolResults.length) modelMessages.push({ role: 'user', content });
   }
   return {
     instructions: instructions.length ? instructions : undefined,

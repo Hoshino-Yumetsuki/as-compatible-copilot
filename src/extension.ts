@@ -123,6 +123,7 @@ function asInputPart(part: unknown): InputPart | undefined {
     return {
       type: 'tool-result',
       callId: part.callId,
+      isError: 'isError' in part && part.isError === true,
       content: part.content.map(asInputPart).filter((value): value is InputPart => !!value)
     };
   }
@@ -371,7 +372,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         try {
           const result = streamText({
             model: await languageModel(configured, context.secrets),
-            ...toModelPrompt(inputMessages),
+            ...toModelPrompt(inputMessages, configured),
             maxOutputTokens: configured.maxOutputTokens,
             providerOptions: reasoningProviderOptions(configured) as never,
             ...(tools ? { tools } : {}),
