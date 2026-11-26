@@ -77,7 +77,7 @@
     "build:vsce": "node --run build && vsce package --no-yarn",
     "bundle:test": "rolldown -c rolldown.test.config.mjs",
     "build": "node --run clean && node --run build:webview && node --run bundle",
-    "test": "node --run clean && node --run lint && node --run bundle:test && node --test dist/test/*.test.js",
+    "test": "node --run clean && node --run lint && node --run bundle:test && node --test dist/test/*.test.js test/extension.test.cjs",
     "lint": "oxlint",
     "lint-fix": "oxlint --fix && oxfmt"
   },
